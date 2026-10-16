@@ -1309,6 +1309,7 @@ function enterApp(){
   renderAll(); setBusy(false);
   const n=Vault.records.length;
   say(n?('解錠しました。記憶庫に '+n+' 件の記憶があります。ご命令を。'):'解錠しました。記憶庫は空です。『覚えて: 内容』で最初の記憶を登録してください。');
+  Bridge.ready().then(function(ok){ if(!ok)say('外部連携はまだ未設定です。「通信」→「ブリッジ」から、Gmail・LINE・メールを繋げられます。') });
   renderChips(); $('#cmd').focus();
 }
 function renderChips(){
@@ -1560,6 +1561,21 @@ const Gmail={
       body:JSON.stringify({raw:b64url(new TextEncoder().encode(msg))})});
   }
 };
+const Bridge={
+  async cfg(){ return (await Store.get('bridge'))||{} },
+  async save(o){ await Store.set('bridge',o) },
+  async ready(){ const c=await this.cfg(); return !!c.url },
+  async call(action,payload){
+    const c=await this.cfg();
+    if(!c.url)throw new Error('ブリッジURLが未設定です');
+    const res=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(Object.assign({token:c.token||'',action:action},payload||{})),redirect:'follow'});
+    if(!res.ok)throw new Error('ブリッジ HTTP '+res.status);
+    const j=await res.json();
+    if(!j.ok)throw new Error(j.error||'ブリッジがエラーを返しました');
+    return j;
+  }
+};
 async function ensureGmail(){ if(!Gmail.token) await Gmail.connect() }
 function mailCard(m){
   const el=entry('ai');
@@ -1570,10 +1586,23 @@ function mailCard(m){
   $('#log').appendChild(el); scrollLog();
 }
 
+/* ---- ブリッジのコード（アプリ内に保持） ---- */
+const BRIDGE_CODE = "/* ============================================================================\n   記憶方舟 アルカ — ブリッジ（Google Apps Script 用）\n   ----------------------------------------------------------------------------\n   役割: ブラウザ単体では届かない領域を担う中継所\n         ・Gmail の読み取り／送信\n         ・LINE への送信（Messaging API）\n         ・定期実行（毎朝のダイジェスト等）\n   設置: script.google.com → 新規プロジェクト → このコードを貼る\n         → スクリプト プロパティに TOKEN を登録 → デプロイ → ウェブアプリ\n   ============================================================================ */\n\n/* ---------------------------------------------------------------\n   入口\n   --------------------------------------------------------------- */\nfunction doPost(e) {\n  try {\n    if (!e || !e.postData || !e.postData.contents) {\n      return reply({ ok: false, error: 'empty request' });\n    }\n    var req = JSON.parse(e.postData.contents);\n    var props = PropertiesService.getScriptProperties();\n    var token = props.getProperty('TOKEN');\n    if (token && req.token !== token) {\n      return reply({ ok: false, error: 'unauthorized: トークンが一致しません' });\n    }\n    return reply(route(req));\n  } catch (err) {\n    return reply({ ok: false, error: String((err && err.message) ? err.message : err) });\n  }\n}\n\nfunction doGet() {\n  return reply({\n    ok: true,\n    app: 'arca-bridge',\n    hint: 'POST で {action, token} を送ってください',\n    actions: ['ping', 'mail_list', 'mail_send', 'line_push', 'mail_digest_line', 'status']\n  });\n}\n\nfunction reply(obj) {\n  return ContentService.createTextOutput(JSON.stringify(obj))\n    .setMimeType(ContentService.MimeType.JSON);\n}\n\nfunction route(req) {\n  switch (req.action) {\n    case 'ping':             return ping();\n    case 'status':           return status();\n    case 'mail_list':        return mailList(req);\n    case 'mail_send':        return mailSend(req);\n    case 'line_push':        return linePush(req.text);\n    case 'mail_digest_line': return mailDigestToLine();\n    default:                 return { ok: false, error: 'unknown action: ' + req.action };\n  }\n}\n\n/* ---------------------------------------------------------------\n   基本\n   --------------------------------------------------------------- */\nfunction ping() {\n  return {\n    ok: true,\n    app: 'arca-bridge',\n    version: 2,\n    time: new Date().toISOString(),\n    account: Session.getActiveUser().getEmail()\n  };\n}\n\nfunction status() {\n  var props = PropertiesService.getScriptProperties();\n  var triggers = ScriptApp.getProjectTriggers();\n  return {\n    ok: true,\n    account: Session.getActiveUser().getEmail(),\n    token_set: !!props.getProperty('TOKEN'),\n    line_token_set: !!props.getProperty('LINE_TOKEN'),\n    line_to_set: !!props.getProperty('LINE_TO'),\n    triggers: triggers.map(function (t) { return t.getHandlerFunction(); })\n  };\n}\n\n/* ---------------------------------------------------------------\n   Gmail\n   --------------------------------------------------------------- */\nfunction mailList(req) {\n  var q = req.query || 'in:inbox';\n  var max = Math.min(Number(req.max) || 10, 30);\n  var threads = GmailApp.search(q, 0, max);\n  var out = [];\n  for (var i = 0; i < threads.length; i++) {\n    var msgs = threads[i].getMessages();\n    var m = msgs[msgs.length - 1];\n    var labels = threads[i].getLabels().map(function (l) { return l.getName(); });\n    out.push({\n      id: threads[i].getId(),\n      from: m.getFrom(),\n      subject: m.getSubject() || '(件名なし)',\n      date: Utilities.formatDate(m.getDate(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm'),\n      snippet: m.getPlainBody().replace(/\\s+/g, ' ').slice(0, 220),\n      unread: threads[i].isUnread(),\n      starred: threads[i].isStarred()\n    });\n  }\n  return { ok: true, count: out.length, query: q, messages: out };\n}\n\nfunction mailSend(req) {\n  if (!req.to || !req.subject) return { ok: false, error: 'to と subject が必要です' };\n  var opts = {};\n  if (req.cc) opts.cc = req.cc;\n  GmailApp.sendEmail(req.to, req.subject, req.body || '', opts);\n  return { ok: true, sent_to: req.to, subject: req.subject };\n}\n\n/* ---------------------------------------------------------------\n   LINE（Messaging API プッシュ送信）\n   --------------------------------------------------------------- */\nfunction linePush(text) {\n  var props = PropertiesService.getScriptProperties();\n  var token = props.getProperty('LINE_TOKEN');\n  var to = props.getProperty('LINE_TO');\n  if (!token || !to) {\n    return { ok: false, error: 'LINE_TOKEN と LINE_TO が未設定です' };\n  }\n  if (!text) return { ok: false, error: 'text が空です' };\n  var res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {\n    method: 'post',\n    contentType: 'application/json',\n    headers: { Authorization: 'Bearer ' + token },\n    payload: JSON.stringify({ to: to, messages: [{ type: 'text', text: String(text).slice(0, 4900) }] }),\n    muteHttpExceptions: true\n  });\n  var code = res.getResponseCode();\n  if (code !== 200) return { ok: false, error: 'LINE HTTP ' + code + ': ' + res.getContentText() };\n  return { ok: true, sent: true };\n}\n\n/* ---------------------------------------------------------------\n   定期実行（毎朝のGmailダイジェストをLINEへ）\n   --------------------------------------------------------------- */\nfunction mailDigestToLine() {\n  var threads = GmailApp.search('is:unread in:inbox', 0, 10);\n  if (!threads.length) return linePush('アルカ: 未読メールはありません。');\n  var lines = threads.map(function (t) {\n    var m = t.getMessages()[t.getMessageCount() - 1];\n    return '・' + (m.getSubject() || '(件名なし)') + '\\n   ' + m.getFrom().replace(/<.*>/, '').trim();\n  });\n  return linePush('アルカ: 未読 ' + threads.length + ' 件\\n' + lines.join('\\n'));\n}\n\n/* ---------------------------------------------------------------\n   初回設定：毎朝 7:30 の定期実行を設置（1回だけ手動で実行）\n   --------------------------------------------------------------- */\nfunction setupDailyDigest() {\n  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });\n  ScriptApp.newTrigger('mailDigestToLine')\n    .timeBased().atHour(7).nearMinute(30).everyDays(1).create();\n  Logger.log('毎朝 7:30 の LINE ダイジェストを設置しました。');\n  return { ok: true };\n}\n\n/* ---------------------------------------------------------------\n   トークンを自動生成したい場合（1回だけ手動で実行 → ログを確認）\n   --------------------------------------------------------------- */\nfunction generateToken() {\n  var token = Utilities.getUuid().replace(/-/g, '');\n  PropertiesService.getScriptProperties().setProperty('TOKEN', token);\n  Logger.log('ARCA_TOKEN = ' + token);\n  return token;\n}\n\n/* ============================================================================\n   LINE Messaging API の準備（初回のみ）\n   ----------------------------------------------------------------------------\n   1) LINE Developers (developers.line.biz) でプロバイダーを作成\n   2) 「Messaging API」チャネルを新規作成（公式アカウントが自動作成される）\n   3) 「Messaging API設定」タブ → チャネルアクセストークン（長期）を発行\n      → スクリプト プロパティ LINE_TOKEN に登録\n   4) 自分のLINEでその公式アカウントを友だち追加\n   5) チャネル基本設定の「あなたのユーザーID」をコピー\n      → スクリプト プロパティ LINE_TO に登録\n\n   注意:\n   ・LINE Notify は 2025年3月31日 で終了済み。Messaging API が正規の後継です。\n   ・個人アカウントのトーク履歴は API では取得できません（送信のみ可能）。\n   ============================================================================ */\n";
+
 /* ================= 20. 通信アレイ（パネル） ================= */
 function renderComm(){
   const b=$('#commBody');
   b.innerHTML=
+  '<section class="cmsec">'+
+    '<div class="cmhead"><span class="nm">ブリッジ</span><span class="badge warn" id="brBadge">確認中</span></div>'+
+    '<p class="note"><b>ここが中継所です。</b>Google Apps Script に設置したコードと、このアプリを繋ぎます。'+
+    'Gmail・LINE・他社メール・定期実行を<b>まとめて</b>扱えるようになります。ブラウザから直接届かない領域も、ここを経由すれば可能です。</p>'+
+    '<label class="fld"><span>ブリッジURL（GASのウェブアプリURL）</span><input type="text" id="brUrl" placeholder="https://script.google.com/macros/s/.../exec"></label>'+
+    '<label class="fld"><span>トークン（合言葉）</span><input type="text" id="brToken" placeholder="GASの TOKEN と同じ文字列"></label>'+
+    '<div class="row"><button class="btn" id="brGen" type="button">トークンを生成</button><button class="btn" id="brSave" type="button">保存</button></div>'+
+    '<div class="row"><button class="btn primary" id="brTest" type="button">接続テスト</button><button class="btn" id="brCode" type="button">コードを表示・コピー</button></div>'+
+    '<div class="codebox" id="brOut">未接続</div>'+
+  '</section>'+
   '<section class="cmsec">'+
     '<div class="cmhead"><span class="nm">Gmail</span><span class="badge '+(Gmail.token?'on':'warn')+'" id="gmBadge">'+(Gmail.token?'接続中':'未接続')+'</span></div>'+
     '<p class="note">ブラウザから直接Gmail APIに接続します。クライアントIDは公開情報で、秘密鍵は不要です。アクセストークンは端末に保存しません。</p>'+
@@ -1626,12 +1655,63 @@ function renderComm(){
       renderAll();
     }catch(e){ toast('送信できませんでした','err'); say('送信エラー: '+((e&&e.message)||e),'err') }
   };
-  const gasHint=function(){
-    say('ブリッジ用のコードは、お渡ししたパッケージ内の bridge-gas.js にあります。Google Apps Script に貼り付けて設置してください。');
-    say('設置手順: script.google.com で新規プロジェクト → bridge-gas.js の内容を貼る → スクリプト プロパティに LINE_TOKEN と LINE_TO を登録 → installTriggers を実行。');
+  const showBridgeCode=async function(){
+    let copied=false;
+    try{ await navigator.clipboard.writeText(BRIDGE_CODE); copied=true }catch(e){}
+    say(copied?'ブリッジのコードをコピーしました。Apps Script のエディタに貼り付けてください。'
+              :'コピーできませんでした。下の枠を長押し →「すべてを選択」→「コピー」してください。');
+    const el=entry('ai');
+    el.innerHTML='<div class="who">ブリッジ設置手順</div>'+
+      '<div class="txt">1. script.google.com →「APPS SCRIPT を作成」\n'+
+      '2. エディタの中身（function myFunction…）を全部消す\n'+
+      '3. 貼り付け（長押し →「ペースト」）\n'+
+      '4. 保存（💾 アイコン）\n'+
+      '5. ⚙️ プロジェクトの設定 → スクリプト プロパティ → TOKEN を追加\n'+
+      '6. デプロイ → 新しいデプロイ → 種類: ウェブアプリ\n'+
+      '     次のユーザーとして実行: 自分 ／ アクセスできるユーザー: 全員\n'+
+      '7. 出たURLを下の「ブリッジURL」に貼って「接続テスト」</div>'+
+      '<div class="codebox"><textarea id="codeBox" readonly spellcheck="false" '+
+      'style="width:100%;height:170px;background:transparent;border:none;color:var(--ink-dim);font-family:var(--font-mono);font-size:9.5px;line-height:1.55"></textarea></div>';
+    $('#log').appendChild(el);
+    const t=$('#codeBox'); if(t)t.value=BRIDGE_CODE;
+    scrollLog();
   };
-  $('#lineCopy').onclick=gasHint;
-  $('#imapCopy').onclick=gasHint;
+  $('#lineCopy').onclick=showBridgeCode;
+  $('#imapCopy').onclick=showBridgeCode;
+  Bridge.cfg().then(function(c){
+    if($('#brUrl'))$('#brUrl').value=c.url||'';
+    if($('#brToken'))$('#brToken').value=c.token||'';
+    const bg=$('#brBadge'), bo=$('#brOut');
+    if(c.url&&bg){ bg.className='badge on'; bg.textContent='設定済み'; if(bo)bo.textContent='URL: '+c.url+'\nトークン: '+(c.token?'設定済み':'未設定')+'\n「接続テスト」で確認してください。' }
+    else if(bg){ bg.className='badge warn'; bg.textContent='未設定' }
+  });
+  $('#brGen').onclick=async function(){
+    const t=b64url(crypto.getRandomValues(new Uint8Array(24))).slice(0,32);
+    $('#brToken').value=t;
+    try{ await navigator.clipboard.writeText(t); toast('トークンを生成してコピーしました。GASに貼り付けてください。') }
+    catch(e){ toast('トークンを生成しました。長押しでコピーしてください。') }
+  };
+  $('#brSave').onclick=async function(){
+    await Bridge.save({url:$('#brUrl').value.trim(),token:$('#brToken').value.trim()});
+    toast('ブリッジ設定を保存しました。');
+  };
+  $('#brCode').onclick=async function(){
+    let copied=false;
+    try{ await navigator.clipboard.writeText(BRIDGE_CODE); copied=true }catch(e){}
+    $('#brOut').textContent=copied?'コードをコピーしました。Apps Script のエディタに貼り付けてください。':'コピーできませんでした。下の黒い枠を長押ししてください。';
+    if(!copied){ const bo=$('#brOut'); bo.style.maxHeight='300px'; bo.textContent=BRIDGE_CODE }
+  };
+  $('#brTest').onclick=async function(){
+    const out=$('#brOut'); out.textContent='接続しています…';
+    try{
+      const c={url:$('#brUrl').value.trim(),token:$('#brToken').value.trim()};
+      await Bridge.save(c);
+      const r=await Bridge.call('ping');
+      out.textContent='接続成功\nアプリ: '+r.app+'\nアカウント: '+(r.account||'不明')+'\n時刻: '+r.time;
+      $('#brBadge').className='badge on'; $('#brBadge').textContent='接続済み';
+      say('ブリッジに接続しました。アカウント: '+(r.account||'不明'));
+    }catch(e){ out.textContent='接続失敗: '+((e&&e.message)||e); $('#brBadge').className='badge no'; $('#brBadge').textContent='接続失敗' }
+  };
 }
 let llmConfigured=false;
 async function refreshLlmBadge(){ const c=await Store.get('llm'); llmConfigured=!!(c&&c.url&&c.key) }
@@ -1641,6 +1721,13 @@ const Comm={
   async mailList(){
     setBusy(true);
     try{
+      if(await Bridge.ready()){
+        const r=await Bridge.call('mail_list',{query:'in:inbox',max:8});
+        const un=r.messages.filter(function(m){return m.unread}).length;
+        say('受信トレイの直近 '+r.count+' 件を取得しました（ブリッジ経由）。うち未読 '+un+' 件。');
+        r.messages.forEach(mailCard);
+        $('#comm').hidden=true; return;
+      }
       await ensureGmail();
       const ms=await Gmail.list('in:inbox',8);
       const un=ms.filter(function(m){return m.unread}).length;
@@ -1653,6 +1740,17 @@ const Comm={
   async mailImport(){
     setBusy(true);
     try{
+      if(await Bridge.ready()){
+        const r=await Bridge.call('mail_list',{query:'is:unread in:inbox',max:8});
+        if(!r.messages.length){ say('未読メールはありません。'); return }
+        r.messages.forEach(function(m){
+          V.add({title:m.subject,body:m.from+'  /  '+m.date+'\n\n'+m.snippet,tags:['メール','Gmail'],kind:'メール',source:'ブリッジ'});
+        });
+        renderAll();
+        say('未読 '+r.messages.length+' 件を記憶庫に取り込みました（ブリッジ経由）。番号で開けます。');
+        Vault.records.slice(0,r.messages.length).forEach(card);
+        $('#comm').hidden=true; return;
+      }
       await ensureGmail();
       const ms=await Gmail.list('in:inbox is:unread',8);
       if(!ms.length){ say('未読メールはありません。'); return }
@@ -1678,6 +1776,16 @@ const Comm={
       '<div class="cm">Gmailはアプリ内で直接、LINEと他社メールは Google Apps Script ブリッジ経由。</div></div>';
     $('#log').appendChild(el); scrollLog();
   },
+  async linePush(text){
+    setBusy(true);
+    try{
+      await Bridge.call('line_push',{text:text});
+      say('LINEに送信しました。');
+      V.add({title:'LINE送信: '+text.slice(0,20),body:text,tags:['LINE','送信'],kind:'メール',source:'ブリッジ'});
+      renderAll();
+    }catch(e){ say('LINE送信エラー: '+((e&&e.message)||e),'err') }
+    finally{ setBusy(false) }
+  },
   lineExplain(){
     say('LINEについての正直な回答です。');
     const el=entry('ai');
@@ -1691,6 +1799,8 @@ const Comm={
     renderComm(); $('#comm').hidden=false;
   }
 };
+RULES.unshift(['bridge_setup',/^(?:ブリッジ|中継所|連携設定|通信設定)(?:設定|を開いて|を設定)?$/i]);
+RULES.unshift(['line_push',/^(?:LINE|ライン)(?:に|で|へ)\s*(?:送って|送信して|通知して)\s*[:：]?\s*([\s\S]+)$/i]);
 RULES.unshift(['gmail_connect',/^(?:Gmail|gmail|ジーメール|メール)(?:と|に)?\s*(?:接続|連携|つないで|繋いで|ログイン)(?:して)?$/i]);
 RULES.unshift(['comm_status',/^(?:連携|通信|通信アレイ|アレイ|接続状況|つながってる|何と繋がって)/]);
 RULES.unshift(['line_info',/^(?:LINE|ライン)(?:と|に)?\s*(?:接続|連携|つないで|繋いで|管理|対応)(?:して|したい)?$/i]);
@@ -1704,6 +1814,8 @@ Core.run=async function(t){
   if(q.i==='mail_list')return Comm.mailList();
   if(q.i==='mail_import')return Comm.mailImport();
   if(q.i==='mail_send'){ renderComm(); $('#comm').hidden=false; return say('送信フォームを開きました。宛先・件名・本文を入れて送信してください。') }
+  if(q.i==='line_push')return Comm.linePush(q.a[0]);
+  if(q.i==='bridge_setup'){ await refreshLlmBadge(); renderComm(); $('#comm').hidden=false; return say('ブリッジ設定を開きました。GASのウェブアプリURLとトークンを入れて「接続テスト」を押してください。') }
   if(q.i==='line_info')return Comm.lineExplain();
   if(q.i==='comm_status')return Comm.status();
   return _origRun(t);
