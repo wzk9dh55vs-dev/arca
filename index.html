@@ -1,0 +1,1754 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>記憶方舟 アルカ — AI記憶庫</title>
+<meta name="description" content="単独運用者専用の暗号化AI記憶庫。顔認証で解錠し、AIが保存・分類・検索・要約・外部連携まで行います。">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#0B1120">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="アルカ">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=M+PLUS+1+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   記憶方舟 アルカ / ARCA — AI MEMORY VAULT
+   設計: 夜間の艦橋。真鍮色の計器光（琥珀）× 深い藍の船体。
+   ============================================================ */
+
+:root{
+  --hull:#0B1120;
+  --hull-2:#0F1728;
+  --panel:#121B2E;
+  --panel-2:#18233A;
+  --panel-3:#1E2B45;
+  --line:#26344F;
+  --line-soft:#1C273D;
+  --ink:#EDE6D6;
+  --ink-dim:#A8B2C6;
+  --ink-faint:#6C7893;
+  --amber:#E5A03A;
+  --amber-soft:#F2C476;
+  --amber-dim:#8A6428;
+  --teal:#6BC7B6;
+  --alert:#D95C4A;
+  --font-display:"Shippori Mincho B1","Hiragino Mincho ProN","Yu Mincho",serif;
+  --font-ui:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif;
+  --font-mono:"M PLUS 1 Code",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r:2px;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--hull);
+  color:var(--ink);
+  font-family:var(--font-ui);
+  font-size:14px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+body.unlocked{overflow:hidden}
+button,input,textarea,select{font:inherit;color:inherit}
+::selection{background:var(--amber);color:var(--hull)}
+
+/* 計器盤の目盛りグリッド */
+.grid-bg{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(to right,rgba(120,150,200,.055) 1px,transparent 1px),
+    linear-gradient(to bottom,rgba(120,150,200,.055) 1px,transparent 1px);
+  background-size:34px 34px;
+  -webkit-mask-image:radial-gradient(ellipse 120% 90% at 50% 0%,#000 20%,transparent 88%);
+  mask-image:radial-gradient(ellipse 120% 90% at 50% 0%,#000 20%,transparent 88%);
+}
+.grid-bg::after{
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(ellipse 90% 70% at 18% -10%,rgba(229,160,58,.10),transparent 60%),
+             radial-gradient(ellipse 80% 60% at 100% 110%,rgba(60,110,180,.12),transparent 60%);
+}
+
+.mono{font-family:var(--font-mono);font-size:.78em;letter-spacing:.04em}
+.hidden{display:none !important}
+[hidden]{display:none !important}
+
+/* ---------- 波動コア（署名要素） ---------- */
+.core{position:relative;display:grid;place-items:center;--size:170px;width:var(--size);height:var(--size);flex:0 0 auto}
+.core-lg{--size:230px}
+.core-md{--size:168px}
+.core-lock{--size:132px}
+.core-sm{--size:96px}
+.core .ring{position:absolute;border-radius:50%}
+.core .r-out{border:1px dashed var(--line);inset:0;animation:spin 46s linear infinite}
+.core .r-tick{
+  inset:10%;
+  background:
+    repeating-conic-gradient(from 0deg,rgba(229,160,58,.55) 0deg 1.1deg,transparent 1.1deg 15deg);
+  -webkit-mask:radial-gradient(circle,transparent 0 88%,#000 88%);
+  mask:radial-gradient(circle,transparent 0 88%,#000 88%);
+  opacity:.5;
+  animation:spin 90s linear infinite reverse;
+}
+.core .r-sweep{
+  inset:16%;
+  background:conic-gradient(from 0deg,rgba(229,160,58,0) 0deg,rgba(229,160,58,.42) 60deg,rgba(229,160,58,0) 130deg);
+  -webkit-mask:radial-gradient(circle,transparent 0 74%,#000 76%);
+  mask:radial-gradient(circle,transparent 0 74%,#000 76%);
+  opacity:.18;transition:opacity .4s ease;
+}
+.core .r-mid{border:1px solid var(--line-soft);inset:24%}
+.core .r-in{border:1px solid rgba(229,160,58,.28);inset:36%;border-radius:50%}
+.core .glow{
+  position:absolute;inset:30%;border-radius:50%;
+  background:radial-gradient(circle,rgba(229,160,58,.5),rgba(229,160,58,.12) 55%,transparent 72%);
+  filter:blur(6px);animation:breathe 4.2s ease-in-out infinite;
+}
+.core .pip{
+  position:absolute;width:7px;height:7px;border-radius:50%;background:var(--amber);
+  top:50%;left:50%;margin:-3.5px 0 0 -3.5px;
+  box-shadow:0 0 12px 2px rgba(229,160,58,.6);
+}
+.core .corelabel{
+  position:relative;z-index:2;text-align:center;font-family:var(--font-mono);
+  font-size:10px;letter-spacing:.18em;color:var(--amber-soft);opacity:.9;line-height:1.5;
+}
+.core .corelabel b{display:block;font-family:var(--font-display);font-size:13px;letter-spacing:.22em;color:var(--ink)}
+.core.busy .r-sweep{opacity:.95;animation:spin 1.15s linear infinite}
+.core.busy .r-out{animation-duration:9s}
+.core.busy .glow{animation-duration:1.6s}
+.core.locked .glow{background:radial-gradient(circle,rgba(120,140,180,.35),transparent 70%);animation:none}
+.core.locked .pip{background:var(--ink-faint);box-shadow:none}
+.core.alert .glow{background:radial-gradient(circle,rgba(217,92,74,.5),transparent 70%)}
+.core.alert .pip{background:var(--alert);box-shadow:0 0 12px 2px rgba(217,92,74,.6)}
+.ripple{
+  position:absolute;border-radius:50%;border:1px solid var(--amber);
+  left:50%;top:50%;width:20%;height:20%;transform:translate(-50%,-50%);
+  animation:ripple 1.15s ease-out forwards;pointer-events:none;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes breathe{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.09);opacity:1}}
+@keyframes ripple{
+  0%{width:20%;height:20%;opacity:.85;border-width:2px}
+  100%{width:118%;height:118%;opacity:0;border-width:1px}
+}
+
+/* ---------- 汎用パネル ---------- */
+.panel{
+  background:linear-gradient(180deg,var(--panel) 0%,var(--hull-2) 100%);
+  border:1px solid var(--line-soft);
+  position:relative;
+}
+.panel::before,.panel::after{
+  content:"";position:absolute;width:9px;height:9px;pointer-events:none;opacity:.75;
+}
+.panel::before{top:-1px;left:-1px;border-top:1px solid var(--amber-dim);border-left:1px solid var(--amber-dim)}
+.panel::after{bottom:-1px;right:-1px;border-bottom:1px solid var(--amber-dim);border-right:1px solid var(--amber-dim)}
+
+.ph{
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--ink-faint);display:flex;align-items:center;gap:8px;
+}
+.ph::after{content:"";flex:1;height:1px;background:var(--line-soft)}
+
+.btn{
+  appearance:none;background:transparent;border:1px solid var(--line);color:var(--ink-dim);
+  padding:7px 14px;border-radius:var(--r);cursor:pointer;letter-spacing:.06em;
+  font-size:12.5px;transition:border-color .18s,color .18s,background .18s,transform .1s;
+  white-space:nowrap;
+}
+.btn:hover{border-color:var(--amber-dim);color:var(--amber-soft);background:rgba(229,160,58,.06)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.btn.primary{background:var(--amber);border-color:var(--amber);color:#14100A;font-weight:700}
+.btn.primary:hover{background:var(--amber-soft);border-color:var(--amber-soft);color:#14100A}
+.btn.ghost{border-color:var(--line-soft);color:var(--ink-faint)}
+.btn.ghost:hover{color:var(--amber-soft);border-color:var(--amber-dim)}
+.btn.danger{border-color:rgba(217,92,74,.45);color:#E88B7C}
+.btn.danger:hover{background:rgba(217,92,74,.12);border-color:var(--alert);color:#F3A99C}
+.btn.icon{padding:6px 9px;font-size:14px;line-height:1}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+input[type=text],input[type=password],input[type=url],input:not([type]),textarea,select{
+  background:var(--panel-2);border:1px solid var(--line-soft);border-radius:var(--r);
+  padding:9px 11px;width:100%;outline:none;transition:border-color .18s,box-shadow .18s;
+}
+input:focus,textarea:focus,select:focus{border-color:var(--amber-dim);box-shadow:0 0 0 3px rgba(229,160,58,.10)}
+input::placeholder,textarea::placeholder{color:#5A657C}
+label.fld{display:block;margin:0 0 12px}
+label.fld>span{display:block;font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;color:var(--ink-faint);margin-bottom:5px}
+.note{font-size:11.5px;color:var(--ink-faint);line-height:1.6}
+.note b{color:var(--amber-soft);font-weight:500}
+
+.tag{
+  display:inline-flex;align-items:center;gap:4px;font-family:var(--font-mono);font-size:10px;
+  letter-spacing:.06em;padding:2px 7px;border:1px solid var(--line);border-radius:999px;color:var(--ink-dim);
+  white-space:nowrap;
+}
+.tag.hot{border-color:var(--amber-dim);color:var(--amber-soft)}
+.tag.k-work{border-color:#3C5B86;color:#9CBDE6}
+.tag.k-idea{border-color:#7A5C2E;color:var(--amber-soft)}
+.tag.k-money{border-color:#3E6B57;color:#8FD3B4}
+.tag.k-health{border-color:#6B4A62;color:#D9A7CE}
+.tag.k-place{border-color:#40586B;color:#9DC4D8}
+
+/* ---------- オーバーレイ（起動 / 施錠） ---------- */
+.overlay{
+  position:fixed;inset:0;z-index:60;display:grid;place-items:center;
+  background:radial-gradient(ellipse 80% 70% at 50% 30%,#101A2E 0%,var(--hull) 70%);
+  padding:24px;overflow:auto;
+}
+.bootwrap{display:grid;place-items:center;gap:26px;text-align:center}
+.bootlog{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-faint);letter-spacing:.08em;min-height:5.4em;text-align:left}
+.bootlog div{opacity:0;animation:bootin .5s ease forwards}
+.bootlog div b{color:var(--teal);font-weight:400}
+.bootlog div span{color:var(--amber-soft)}
+@keyframes bootin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+.lockcard{
+  width:min(500px,94vw);padding:22px 26px 18px;display:grid;justify-items:center;gap:13px;
+  text-align:center;
+}
+.nameplate{display:grid;gap:2px}
+.nameplate h1{
+  font-family:var(--font-display);font-weight:700;font-size:25px;letter-spacing:.16em;
+  margin:0;color:var(--ink);
+}
+.nameplate .sub{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.34em;color:var(--amber-dim)}
+.lockmsg{font-size:12px;color:var(--ink-dim);min-height:1.6em;margin:0;max-width:42ch}
+.lockpane{width:100%;display:grid;gap:9px}
+.lockcard .fld{margin:0}
+.lockcard input{padding:8px 11px}
+.row{display:flex;gap:9px;align-items:center}
+.row>*{flex:1}
+.err{color:#E88B7C;font-size:11.5px;min-height:1.3em;font-family:var(--font-mono)}
+.ok{color:var(--teal)}
+
+/* ---------- コンソール ---------- */
+#app{position:relative;z-index:1;height:100%;display:flex;flex-direction:column}
+.topbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:18px;
+  padding:10px 18px;border-bottom:1px solid var(--line-soft);
+  background:linear-gradient(180deg,rgba(18,27,46,.9),rgba(11,17,32,.6));
+  backdrop-filter:blur(6px);
+}
+.plate{display:grid;gap:1px;margin-right:auto}
+.plate .nm{font-family:var(--font-display);font-size:17px;font-weight:700;letter-spacing:.14em;line-height:1.2}
+.plate .sb{font-family:var(--font-mono);font-size:9px;letter-spacing:.28em;color:var(--amber-dim)}
+.topright{display:flex;align-items:center;gap:10px}
+.pill{
+  display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-soft);border-radius:999px;
+  padding:4px 12px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;color:var(--ink-dim);
+}
+.pill .dot{width:6px;height:6px;border-radius:50%;background:var(--teal);box-shadow:0 0 8px rgba(107,199,182,.8)}
+.pill.busy .dot{background:var(--amber);box-shadow:0 0 8px rgba(229,160,58,.9);animation:blink 1s steps(2) infinite}
+.pill.locked .dot{background:var(--ink-faint);box-shadow:none}
+@keyframes blink{50%{opacity:.25}}
+.clock{font-family:var(--font-mono);font-size:12px;color:var(--ink-dim);letter-spacing:.06em;min-width:8.4em;text-align:right}
+.clock em{font-style:normal;color:var(--ink-faint);font-size:9.5px;display:block;letter-spacing:.2em}
+
+.console{flex:1 1 auto;display:grid;grid-template-columns:288px minmax(0,1fr) 336px;min-height:0}
+.col{min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.col-left{border-right:1px solid var(--line-soft);padding:16px 16px 14px;gap:12px;overflow-y:auto;background:linear-gradient(180deg,rgba(15,23,40,.6),rgba(11,17,32,.2))}
+.col-mid{padding:14px 0 0}
+.col-right{border-left:1px solid var(--line-soft);padding:16px 14px 0;gap:11px;background:linear-gradient(180deg,rgba(15,23,40,.6),rgba(11,17,32,.2))}
+
+.corewrap{display:grid;place-items:center;padding:4px 0 2px}
+.corestate{text-align:center;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.2em;color:var(--amber-soft)}
+.corestate.idle{color:var(--ink-faint)}
+
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line-soft);border:1px solid var(--line-soft);margin:0}
+.stats div{background:var(--hull-2);padding:8px 10px}
+.stats dt{font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;color:var(--ink-faint);margin:0}
+.stats dd{margin:2px 0 0;font-family:var(--font-mono);font-size:15px;color:var(--ink)}
+.stats dd small{font-size:9.5px;color:var(--ink-faint);margin-left:3px}
+
+details.cfg{border:1px solid var(--line-soft);background:rgba(11,17,32,.4)}
+details.cfg>summary{
+  cursor:pointer;list-style:none;padding:8px 10px;font-family:var(--font-mono);font-size:10px;
+  letter-spacing:.16em;color:var(--ink-faint);display:flex;align-items:center;gap:8px;
+}
+details.cfg>summary::-webkit-details-marker{display:none}
+details.cfg>summary::before{content:"▸";color:var(--amber-dim)}
+details.cfg[open]>summary::before{content:"▾"}
+details.cfg>summary:hover{color:var(--amber-soft)}
+.cfgbody{padding:4px 10px 12px;display:grid;gap:10px;border-top:1px solid var(--line-soft)}
+
+.colfoot{margin-top:auto;padding-top:10px;display:grid;gap:8px}
+
+/* ---------- 命令デッキ ---------- */
+.deckhead{
+  flex:0 0 auto;display:flex;align-items:baseline;gap:12px;padding:0 20px 10px;
+}
+.deckhead .ph{flex:1}
+#deckHint{color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46%}
+.log{
+  flex:1 1 auto;overflow-y:auto;padding:2px 20px 12px;display:flex;flex-direction:column;gap:9px;
+  scroll-behavior:smooth;
+}
+.entry{display:grid;gap:5px;max-width:min(760px,100%);animation:enter .28s ease both}
+@keyframes enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.entry .who{
+  font-family:var(--font-mono);font-size:9.5px;letter-spacing:.2em;color:var(--ink-faint);
+  display:flex;align-items:center;gap:8px;
+}
+.entry .who::after{content:"";flex:1;height:1px;background:var(--line-soft);max-width:120px}
+.entry .txt{
+  border-left:2px solid var(--line);padding:6px 0 6px 12px;font-size:13.5px;color:var(--ink-dim);
+  white-space:pre-wrap;word-break:break-word;
+}
+.entry.me .who{color:var(--ink-faint)}
+.entry.me .txt{border-left-color:var(--panel-3);color:var(--ink);font-family:var(--font-mono);font-size:12.5px}
+.entry.ai .who{color:var(--amber-soft)}
+.entry.ai .txt{border-left-color:var(--amber);color:var(--ink)}
+.entry.sys .txt{border-left-color:var(--teal);color:var(--ink-dim);font-size:12.5px}
+.entry.err .txt{border-left-color:var(--alert);color:#E88B7C}
+.entry .card{
+  border:1px solid var(--line-soft);background:var(--panel);padding:10px 12px;display:grid;gap:7px;
+}
+.entry .card .ct{font-size:12.5px;color:var(--ink)}
+.entry .card .cm{font-family:var(--font-mono);font-size:10px;color:var(--ink-faint)}
+.entry .mini{display:flex;flex-wrap:wrap;gap:6px}
+.entry .mini button{
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;background:transparent;
+  border:1px solid var(--line);color:var(--ink-dim);padding:3px 9px;border-radius:999px;cursor:pointer;
+}
+.entry .mini button:hover{border-color:var(--amber-dim);color:var(--amber-soft)}
+.typing::after{content:"▌";color:var(--amber);animation:blink 1s steps(2) infinite}
+
+.chips{flex:0 0 auto;display:flex;gap:7px;flex-wrap:wrap;padding:0 20px 10px}
+.chips button{
+  background:transparent;border:1px dashed var(--line);color:var(--ink-faint);border-radius:999px;
+  padding:4px 11px;font-size:11.5px;cursor:pointer;transition:.18s;
+}
+.chips button:hover{border-style:solid;border-color:var(--amber-dim);color:var(--amber-soft);background:rgba(229,160,58,.05)}
+
+.cmdbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:9px;margin:0 20px 18px;padding:8px 10px 8px 14px;
+  border:1px solid var(--line);background:var(--panel);position:relative;
+}
+.cmdbar::after{
+  content:"";position:absolute;left:0;bottom:-1px;height:1px;width:0;background:var(--amber);
+}
+.cmdbar.busy::after{animation:sweep 1.4s linear infinite}
+@keyframes sweep{0%{width:0;opacity:.9}100%{width:100%;opacity:.2}}
+.cmdbar .prompt{color:var(--amber);font-size:13px}
+.cmdbar input{border:none;background:transparent;padding:5px 0;font-size:14px;box-shadow:none !important}
+.cmdbar input:focus{box-shadow:none}
+
+/* ---------- 記憶庫 ---------- */
+.searchwrap{position:relative;flex:0 0 auto}
+.tagbar{display:flex;flex-wrap:wrap;gap:6px;flex:0 0 auto;max-height:78px;overflow-y:auto}
+.tagbar button{
+  font-family:var(--font-mono);font-size:10px;background:transparent;border:1px solid var(--line-soft);
+  color:var(--ink-faint);padding:2px 8px;border-radius:999px;cursor:pointer;
+}
+.tagbar button.on{border-color:var(--amber);color:var(--amber-soft);background:rgba(229,160,58,.08)}
+.reclist{flex:1 1 auto;overflow-y:auto;display:grid;gap:1px;align-content:start;background:var(--line-soft);border-top:1px solid var(--line-soft)}
+.rec{
+  background:var(--hull-2);padding:9px 11px;cursor:pointer;display:grid;gap:4px;
+  border-left:2px solid transparent;transition:.16s;
+}
+.rec:hover{background:var(--panel-2)}
+.rec.on{background:var(--panel-2);border-left-color:var(--amber)}
+.rec .r1{display:flex;align-items:center;gap:8px}
+.rec .rid{font-family:var(--font-mono);font-size:9.5px;color:var(--amber-dim);letter-spacing:.08em}
+.rec .rt{font-size:12.5px;color:var(--ink);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rec .r2{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rec .r2 .tm{font-family:var(--font-mono);font-size:9px;color:var(--ink-faint);margin-left:auto}
+.empty{padding:22px 12px;text-align:center;color:var(--ink-faint);font-size:12px;background:var(--hull-2);line-height:1.9}
+.empty b{color:var(--amber-soft);font-weight:400}
+
+/* ---------- ドロワー ---------- */
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:min(470px,94vw);z-index:40;
+  display:flex;flex-direction:column;gap:12px;padding:16px 18px 0;
+  background:linear-gradient(180deg,var(--panel) 0%,var(--hull) 100%);
+  border-left:1px solid var(--line);box-shadow:-24px 0 60px rgba(0,0,0,.55);
+  animation:slidein .24s ease both;overflow-y:auto;
+}
+@keyframes slidein{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
+.drawerhead{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.drawerhead .mono{font-size:11px;letter-spacing:.14em;color:var(--amber-soft)}
+.drawerhead .sp{margin-left:auto}
+.drawer h2{font-family:var(--font-display);font-size:19px;font-weight:500;margin:0;letter-spacing:.04em;line-height:1.5}
+.dmeta{color:var(--ink-faint);display:flex;flex-wrap:wrap;gap:10px}
+.dtags{display:flex;flex-wrap:wrap;gap:6px}
+.dbody{
+  border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);
+  padding:14px 0;white-space:pre-wrap;word-break:break-word;font-size:13.5px;color:var(--ink);
+  flex:1 1 auto;min-height:80px;
+}
+.dbody:empty::before{content:"本文はありません。";color:var(--ink-faint)}
+.dfiles{display:grid;gap:6px}
+.dfiles a{
+  display:flex;align-items:center;gap:9px;border:1px solid var(--line-soft);padding:7px 10px;
+  color:var(--ink-dim);text-decoration:none;font-size:12px;background:rgba(24,35,58,.5);
+}
+.dfiles a:hover{border-color:var(--amber-dim);color:var(--amber-soft)}
+.dfiles .fs{font-family:var(--font-mono);font-size:9.5px;color:var(--ink-faint);margin-left:auto}
+.drawerfoot{
+  flex:0 0 auto;position:sticky;bottom:0;display:flex;flex-wrap:wrap;gap:8px;
+  padding:12px 0 16px;background:linear-gradient(180deg,transparent,var(--hull) 30%);
+}
+
+/* ---------- トースト ---------- */
+#toasts{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:80;display:grid;gap:8px;justify-items:center;pointer-events:none}
+.toast{
+  background:var(--panel-3);border:1px solid var(--amber-dim);color:var(--ink);
+  padding:9px 16px;font-size:12.5px;animation:enter .2s ease both;max-width:80vw;
+}
+.toast.err{border-color:var(--alert);color:#F3A99C}
+
+/* ---------- レスポンシブ ---------- */
+@media (max-width:1080px){
+  body{overflow:auto}
+  #app{height:auto;min-height:100%}
+  .console{grid-template-columns:1fr;height:auto}
+  .col{overflow:visible}
+  .col-left{border-right:none;border-bottom:1px solid var(--line-soft);flex-direction:row;flex-wrap:wrap;align-items:center;gap:18px}
+  .col-left .ph{flex:0 0 100%}
+  .col-right{border-left:none;border-top:1px solid var(--line-soft);padding-bottom:16px}
+  .log{min-height:38vh;max-height:52vh}
+  .reclist{max-height:52vh}
+  .deckhead .ph{flex:0 0 auto}
+  #deckHint{max-width:100%}
+  .topbar{flex-wrap:wrap;gap:10px}
+  .clock{min-width:auto}
+}
+@media (max-width:560px){
+  .plate .nm{font-size:15px}
+  .lockcard{padding:24px 18px}
+  .nameplate h1{font-size:24px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001s !important;animation-iteration-count:1 !important;transition-duration:.001s !important}
+  .core .r-out,.core .r-tick{animation:none}
+}
+</style>
+</head>
+<body>
+<div class="grid-bg" aria-hidden="true"></div>
+
+<!-- ============ 起動 ============ -->
+<section id="boot" class="overlay" aria-label="起動シーケンス">
+  <div class="bootwrap">
+    <div class="core core-lg locked" id="bootCore"></div>
+    <div class="bootlog" id="bootlog"></div>
+  </div>
+</section>
+
+<!-- ============ 施錠 / 初期設定 ============ -->
+<section id="lock" class="overlay" hidden aria-label="解錠">
+  <div class="lockcard panel">
+    <div class="nameplate">
+      <h1>記憶方舟 アルカ</h1>
+      <div class="sub">ARCA &middot; AI MEMORY VAULT</div>
+    </div>
+    <div class="core core-md core-lock locked" id="lockCore"></div>
+    <p class="lockmsg" id="lockMsg"></p>
+
+    <div class="lockpane" id="paneSetup" hidden>
+      <label class="fld"><span>マスターパスコード（6文字以上）</span>
+        <input type="password" id="setPass" autocomplete="new-password" placeholder="記憶庫の暗号鍵になります">
+      </label>
+      <label class="fld"><span>確認のためもう一度</span>
+        <input type="password" id="setPass2" autocomplete="new-password">
+      </label>
+      <button class="btn" id="btnRegPasskey" type="button">パスキーを登録（生体認証）</button>
+      <p class="note" id="pkNote">パスキーは指紋・顔・端末PINで解錠する「門番」です。<b>登録は任意</b>。登録すると以後ワンタッチで解錠できます。</p>
+      <button class="btn primary" id="btnCreate" type="button">記憶庫を起動</button>
+    </div>
+
+    <div class="lockpane" id="paneUnlock" hidden>
+      <button class="btn primary" id="btnPasskey" type="button">パスキーで解錠</button>
+      <div class="row">
+        <input type="password" id="unlockPass" autocomplete="current-password" placeholder="パスコード">
+        <button class="btn" id="btnUnlockPass" type="button" style="flex:0 0 auto">解錠</button>
+      </div>
+      <p class="note" id="unlockHint"></p>
+    </div>
+    <p class="err" id="lockErr"></p>
+  </div>
+</section>
+
+<!-- ============ 艦橋 ============ -->
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="plate">
+      <div class="nm">記憶方舟 アルカ</div>
+      <div class="sb">ARCA / AI MEMORY VAULT</div>
+    </div>
+    <div class="topright">
+      <span class="pill" id="aiStatus"><span class="dot"></span><span id="aiStatusTxt">待機</span></span>
+      <span class="clock" id="clock">--:--:--<em>JST</em></span>
+      <button class="btn ghost" id="btnInstall" type="button" hidden>アプリとして導入</button>
+      <button class="btn ghost" id="btnComm" type="button">通信</button>
+      <button class="btn ghost" id="btnSettings" type="button">設定</button>
+      <button class="btn" id="btnLock" type="button">施錠</button>
+    </div>
+  </header>
+
+  <main class="console">
+    <aside class="col col-left">
+      <div class="ph">波動コア</div>
+      <div class="corewrap"><div class="core core-md" id="core"></div></div>
+      <div class="corestate idle" id="coreState">待機中</div>
+
+      <div class="ph">記憶庫 状態</div>
+      <dl class="stats" id="stats"></dl>
+
+      <details class="cfg">
+        <summary>外部知能リンク（任意）</summary>
+        <div class="cfgbody">
+          <p class="note">ローカル推論コアが解釈できなかった命令を、外部のAIに委ねます。APIキーはこの端末の記憶域にのみ保存されます。</p>
+          <label class="fld"><span>エンドポイント</span><input type="url" id="llmUrl" placeholder="https://api.openai.com/v1/chat/completions"></label>
+          <label class="fld"><span>モデル</span><input type="text" id="llmModel" placeholder="gpt-4o-mini"></label>
+          <label class="fld"><span>APIキー</span><input type="password" id="llmKey" placeholder="sk-..."></label>
+          <button class="btn" id="btnLlmSave" type="button">リンクを保存</button>
+        </div>
+      </details>
+
+      <div class="colfoot">
+        <button class="btn ghost" id="btnExport2" type="button">記憶を書き出す</button>
+      </div>
+    </aside>
+
+    <section class="col col-mid">
+      <div class="deckhead">
+        <div class="ph">命令デッキ</div>
+        <div class="hint mono" id="deckHint">アルカが待機しています</div>
+      </div>
+      <div class="log" id="log" role="log" aria-live="polite"></div>
+      <div class="chips" id="chips"></div>
+      <form class="cmdbar" id="cmdform" autocomplete="off">
+        <span class="prompt mono">&gt;</span>
+        <input id="cmd" type="text" placeholder="命令を入力 —「覚えて: 明日10時に歯医者」「3番を開いて」「整理して」" aria-label="命令">
+        <button class="btn ghost icon" id="btnAttach" type="button" title="ファイルを取り込む">&#128206;</button>
+        <button class="btn primary" id="btnRun" type="submit">実行</button>
+      </form>
+      <input type="file" id="fileInput" multiple hidden>
+    </section>
+
+    <aside class="col col-right">
+      <div class="ph">記憶庫 <span class="count mono" id="recCount">0</span></div>
+      <input class="search" id="search" type="text" placeholder="検索 / #タグ" aria-label="記憶を検索">
+      <div class="tagbar" id="tagbar"></div>
+      <div class="reclist" id="reclist"></div>
+    </aside>
+  </main>
+</div>
+
+<!-- ============ 記憶 詳細 ============ -->
+<aside class="drawer" id="drawer" hidden aria-label="記憶の詳細">
+  <div class="drawerhead">
+    <span class="mono" id="dId"></span>
+    <span class="tag" id="dKind"></span>
+    <span class="sp"></span>
+    <button class="btn ghost icon" id="dClose" type="button" aria-label="閉じる">&#10005;</button>
+  </div>
+  <h2 id="dTitle"></h2>
+  <div class="mono dmeta" id="dMeta"></div>
+  <div class="dtags" id="dTags"></div>
+  <div class="dbody" id="dBody"></div>
+  <div class="dfiles" id="dFiles"></div>
+  <div class="drawerfoot">
+    <button class="btn" id="dCopy" type="button">コピー</button>
+    <button class="btn" id="dSum" type="button">要約</button>
+    <button class="btn" id="dRename" type="button">名前を変更</button>
+    <button class="btn" id="dTagAdd" type="button">タグ追加</button>
+    <button class="btn danger" id="dDelete" type="button">破棄</button>
+  </div>
+</aside>
+
+<!-- ============ 設定 ============ -->
+<aside class="drawer" id="settings" hidden aria-label="設定">
+  <div class="drawerhead">
+    <span class="ph" style="flex:0 0 auto">設定</span>
+    <span class="sp"></span>
+    <button class="btn ghost icon" id="sClose" type="button" aria-label="閉じる">&#10005;</button>
+  </div>
+  <label class="fld"><span>自動施錠</span>
+    <select id="sAutoLock">
+      <option value="1">1分</option><option value="5">5分</option>
+      <option value="10">10分</option><option value="30">30分</option><option value="0">しない</option>
+    </select>
+  </label>
+  <label class="fld"><span>この記憶庫の持ち主</span><input type="text" id="sOwner" placeholder="あなたの名前"></label>
+  <label class="fld" style="display:flex;align-items:center;gap:9px;cursor:pointer">
+    <input type="checkbox" id="sPkRequired" style="width:auto;flex:0 0 auto">
+    <span style="margin:0">パスキー専用にする（パスコード解錠を禁止）</span>
+  </label>
+  <p class="note" id="sealNote"></p>
+  <div class="ph">パスキー</div>
+  <p class="note" id="sPkState"></p>
+  <button class="btn ghost" id="sPkDiag" type="button">パスキー診断</button>
+  <p class="note" id="sPkDiagOut"></p>
+  <div class="row">
+    <button class="btn" id="sPkReg" type="button">登録する</button>
+    <button class="btn danger" id="sPkDel" type="button">解除する</button>
+  </div>
+  <div class="ph">保存</div>
+  <p class="note" id="sStore"></p>
+  <button class="btn ghost" id="sExport" type="button">記憶を書き出す（JSON）</button>
+  <div class="ph">危険領域</div>
+  <p class="note">記憶庫を初期化すると、すべての記憶と暗号鍵が消えます。取り消せません。</p>
+  <button class="btn danger" id="sPurge" type="button">記憶庫を初期化</button>
+  <div style="height:24px"></div>
+</aside>
+
+<aside class="drawer" id="comm" hidden aria-label="通信アレイ">
+  <div class="drawerhead">
+    <span class="ph" style="flex:0 0 auto">通信アレイ</span>
+    <span class="sp"></span>
+    <button class="btn ghost icon" id="cClose" type="button" aria-label="閉じる">&#10005;</button>
+  </div>
+  <div id="commBody"></div>
+  <div style="height:20px"></div>
+</aside>
+
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+/* ================= 0. 基礎 ================= */
+const $=(s,r)=>(r||document).querySelector(s);
+const enc=new TextEncoder(), dec=new TextDecoder();
+const b64e=b=>btoa(String.fromCharCode.apply(null,new Uint8Array(b)));
+const b64d=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const rand=n=>crypto.getRandomValues(new Uint8Array(n));
+const now=()=>Date.now();
+const pad=n=>String(n).padStart(2,'0');
+const fmtDate=t=>{const d=new Date(t);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes())};
+const rel=t=>{const s=(now()-t)/1000;if(s<60)return'たった今';if(s<3600)return Math.floor(s/60)+'分前';if(s<86400)return Math.floor(s/3600)+'時間前';const d=Math.floor(s/86400);return d<30?d+'日前':fmtDate(t).slice(0,10)};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const SECURE=!!(window.isSecureContext&&window.crypto&&window.crypto.subtle);
+const REDUCED=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const IS_FRAME=(function(){try{return window.top!==window.self}catch(e){return true}})();
+const HAS_PKC=!!(window.PublicKeyCredential&&navigator.credentials&&navigator.credentials.create);
+
+/* ================= 1. 記憶域（IndexedDB / localStorage） ================= */
+const Store=(()=>{
+  let db=null,mode='none';const LS='arca.kv.';
+  const openDb=()=>new Promise((res,rej)=>{const r=indexedDB.open('arca-vault',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+  const api={
+    async init(){
+      try{ db=await openDb(); await api.set('__probe',1); await api.del('__probe'); mode='idb'; return mode }catch(e){}
+      try{ localStorage.setItem(LS+'__probe','1'); localStorage.removeItem(LS+'__probe'); mode='ls'; return mode }catch(e){}
+      mode='none'; return mode;
+    },
+    get mode(){return mode},
+    get(k){ if(mode==='none')return Promise.resolve(undefined);
+      if(mode==='idb')return new Promise((res,rej)=>{const t=db.transaction('kv','readonly').objectStore('kv').get(k);t.onsuccess=()=>res(t.result);t.onerror=()=>rej(t.error)});
+      try{const v=localStorage.getItem(LS+k);return v?JSON.parse(v):undefined}catch(e){return undefined} },
+    set(k,v){ if(mode==='none')return Promise.reject(new Error('保存域を利用できません'));
+      if(mode==='idb')return new Promise((res,rej)=>{const t=db.transaction('kv','readwrite').objectStore('kv').put(v,k);t.onsuccess=()=>res();t.onerror=()=>rej(t.error)});
+      try{localStorage.setItem(LS+k,JSON.stringify(v));return Promise.resolve()}catch(e){return Promise.reject(e)} },
+    del(k){ if(mode==='none')return Promise.resolve();
+      if(mode==='idb')return new Promise((res,rej)=>{const t=db.transaction('kv','readwrite').objectStore('kv').delete(k);t.onsuccess=()=>res();t.onerror=()=>rej(t.error)});
+      localStorage.removeItem(LS+k);return Promise.resolve() }
+  };
+  return api;
+})();
+
+/* ================= 2. 暗号 ================= */
+const Crypt=(()=>{
+  const kek=async(pass,salt,it)=>{const base=await crypto.subtle.importKey('raw',enc.encode(pass),'PBKDF2',false,['deriveKey']);
+    return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:it,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])};
+  const keyFrom=raw=>crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt','decrypt']);
+  const seal=async(key,obj)=>{const iv=rand(12);const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,enc.encode(JSON.stringify(obj)));return{iv:b64e(iv),ct:b64e(ct)}};
+  const unseal=async(key,box)=>{const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64d(box.iv)},key,b64d(box.ct));return JSON.parse(dec.decode(pt))};
+  return {kek,keyFrom,seal,unseal};
+})();
+
+/* ================= 3. パスキー ================= */
+const Auth={
+  get blocked(){
+    if(IS_FRAME)return 'frame';
+    if(!SECURE)return 'insecure';
+    if(!HAS_PKC)return 'unsupported';
+    return '';
+  },
+  get can(){ return this.blocked==='' },
+  explain(){
+    const b=this.blocked;
+    if(b==='frame')return 'この画面は<b>埋め込みプレビュー内</b>で表示されているため、パスキーを登録できません（ブラウザのセキュリティ制限）。<b>デプロイしたHTTPSのURLを直接開いてください</b>。';
+    if(b==='insecure')return 'このページは<b>HTTPSではない</b>ため、パスキーを登録できません。HTTPSのURLに置いて開いてください。';
+    if(b==='unsupported')return 'このブラウザはパスキー（WebAuthn）に対応していません。Chrome / Safari / Edge の最新版をお使いください。';
+    return '';
+  },
+  async uvpaa(){ try{ return !!(await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()) }catch(e){ return false } },
+  async register(name){
+    const base={
+      challenge:rand(32),
+      rp:{name:'記憶方舟 アルカ'},
+      user:{id:rand(16),name:name||'operator',displayName:'アルカ運用者'},
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      timeout:60000, attestation:'none'
+    };
+    const tries=[
+      {authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'preferred'}},
+      {authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'preferred',residentKey:'preferred'}},
+      {authenticatorSelection:{authenticatorAttachment:'cross-platform',userVerification:'preferred',residentKey:'preferred'}},
+      {}
+    ];
+    let last=null;
+    for(let i=0;i<tries.length;i++){
+      try{
+        const cred=await navigator.credentials.create({publicKey:Object.assign({},base,tries[i])});
+        return b64e(cred.rawId);
+      }catch(e){
+        last=e;
+        const n=(e&&e.name)||'';
+        if(n==='NotAllowedError'||n==='InvalidStateError'||n==='AbortError')break;
+        if(n==='SecurityError')break;
+      }
+    }
+    throw last||new Error('登録できませんでした');
+  },
+  async verify(id){
+    const a=await navigator.credentials.get({publicKey:{
+      challenge:rand(32),
+      allowCredentials:id?[{type:'public-key',id:b64d(id)}]:[],
+      userVerification:'required', timeout:60000}});
+    return !!a;
+  }
+};
+
+/* ================= 4. 記憶庫 ================= */
+const Vault={
+  meta:null, MK:null, records:[], autoLockMin:10,
+  async boot(){ this.meta=(await Store.get('meta'))||null; if(this.meta)this.autoLockMin=this.meta.autoLockMin!=null?this.meta.autoLockMin:10; return this.meta; },
+  async create(pass){
+    const salt=rand(16), it=250000;
+    const kk=await Crypt.kek(pass,salt,it);
+    const mk=rand(32);
+    this.meta={v:1,salt:b64e(salt),iters:it,
+      wrapPass:await Crypt.seal(kk,{mk:b64e(mk)}),
+      check:await Crypt.seal(kk,{t:'ARCA-VAULT-V1'}),
+      passkey:null, devKey:null, wrapDev:null, autoLockMin:10, created:now()};
+    this.MK=mk; this.records=[]; this.autoLockMin=10;
+    await this.saveMeta(); await this.save();
+  },
+  async quickUnlock(){
+    if(!this.meta)return false;
+    const dk=rand(32);
+    this.meta.devKey=b64e(dk);
+    this.meta.wrapDev=await Crypt.seal(await Crypt.keyFrom(dk),{mk:b64e(this.MK)});
+    await this.saveMeta(); return true;
+  },
+  async unlockPass(pass){
+    try{
+      const kk=await Crypt.kek(pass,b64d(this.meta.salt),this.meta.iters);
+      const chk=await Crypt.unseal(kk,this.meta.check);
+      if(!chk||chk.t!=='ARCA-VAULT-V1')return{ok:false,msg:'パスコードが違います。'};
+      const w=await Crypt.unseal(kk,this.meta.wrapPass);
+      this.MK=b64d(w.mk); await this.load(); return{ok:true};
+    }catch(e){return{ok:false,msg:'パスコードが違います。'}}
+  },
+  async unlockPasskey(){
+    if(!this.meta||!this.meta.passkey)return{ok:false,msg:'パスキーが登録されていません。'};
+    try{
+      const ok=await Auth.verify(this.meta.passkey.id);
+      if(!ok)return{ok:false,msg:'認証できませんでした。'};
+      if(!this.meta.devKey||!this.meta.wrapDev)return{ok:false,needPass:true,msg:'この端末ではパスコードでの解錠が必要です。'};
+      const w=await Crypt.unseal(await Crypt.keyFrom(b64d(this.meta.devKey)),this.meta.wrapDev);
+      this.MK=b64d(w.mk); await this.load(); return{ok:true};
+    }catch(e){ return{ok:false,msg:'パスキーを利用できませんでした（'+(e&&e.name||'エラー')+'）。パスコードをお使いください。'} }
+  },
+  async load(){
+    const box=await Store.get('vault');
+    if(!box){this.records=[];return}
+    if(box.plain){this.records=box.plain||[];return}
+    try{ const d=await Crypt.unseal(await Crypt.keyFrom(this.MK),box); this.records=d.records||[]; }
+    catch(e){ this.records=[]; }
+  },
+  async save(){
+    if(!SECURE){ await Store.set('vault',{plain:this.records}); return }
+    await Store.set('vault',await Crypt.seal(await Crypt.keyFrom(this.MK),{records:this.records}));
+  },
+  async saveMeta(){ await Store.set('meta',this.meta) },
+  lock(){ this.MK=null; this.records=[]; },
+  async purge(){ await Store.del('vault'); await Store.del('meta'); await Store.del('llm'); this.meta=null; this.MK=null; this.records=[]; }
+};
+
+/* ================= 5. 自動解析（ローカル推論コア） ================= */
+const KIND_RULES=[
+  {k:'リンク',t:/https?:\/\/|www\./i},
+  {k:'連絡先',t:/(?:0\d{1,4}[-(]?\d{1,4}[-)]?\d{3,4}|[\w.+-]+@[\w-]+\.[A-Za-z]{2,})/},
+  {k:'予定',t:/(?:\d{1,2}\s*[月\/]\s*\d{1,2}\s*日?|\d{1,2}:\d{2}|明日|今日|来週|再来週|毎週|予定|〆切|締切|期限)/},
+  {k:'コード',t:/(?:function\s|=>|const\s|;\s*$|<\/?[a-z][a-z0-9]*>|SELECT\s|def\s|import\s|\{\s*$)/im},
+  {k:'買い物',t:/(?:買う|購入|注文|カート|円|Amazon|楽天|ドラッグ|スーパー)/}
+];
+const TAG_DICT={
+  '仕事':['会議','打合せ','打ち合わせ','案件','クライアント','上司','部下','報告','資料','提案','見積','納期','出張','面談','採用','契約','稟議'],
+  'アイデア':['アイデア','企画','案','思いつき','ひらめき','新規','試作','プロト','コンセプト','構想','設計'],
+  'お金':['円','請求','支払','口座','給与','経費','税','投資','家計','予算','費用','価格','料金','見積'],
+  '予定':['予定','約束','〆切','締切','期限','までに','集合','出発','開始','開催','参加','アポ'],
+  '買い物':['買う','購入','注文','カート','欲しい','スーパー','薬局','日用品','ストック'],
+  '健康':['病院','医者','薬','診察','検診','睡眠','運動','ジム','食事','体調','歯医者','散歩','ランニング'],
+  '学び':['勉強','学習','本','読書','講座','論文','資格','試験','講義','チュートリアル','ドキュメント'],
+  '場所':['駅','店','ホテル','空港','住所','地図','レストラン','カフェ','駐車場','最寄り'],
+  '連絡先':['電話','メール','連絡先','アドレス','携帯','番号','LINE'],
+  '趣味':['映画','アニメ','ゲーム','音楽','旅行','写真','料理','釣り','登山','観た','聴いた'],
+  'コード':['function','const','class','npm','python','javascript','css','html','api','git','エラー','バグ','デプロイ','sql'],
+  'ファイル':['ファイル','取り込み','添付','資料']
+};
+function autoKind(s){ for(const r of KIND_RULES){ if(r.t.test(s))return r.k } return 'メモ' }
+function autoTags(s){
+  const t=s.toLowerCase(); const sc=[];
+  for(const k in TAG_DICT){ let n=0; TAG_DICT[k].forEach(w=>{ if(t.indexOf(w.toLowerCase())>=0)n++ }); if(n)sc.push([k,n]) }
+  return sc.sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]);
+}
+function autoTitle(s){
+  const line=String(s).split('\n').map(x=>x.trim()).filter(Boolean)[0]||'無題';
+  const t=line.replace(/^[#>*\-\s]+/,'').replace(/https?:\/\/\S+/g,'リンク').trim();
+  return t.length>30?t.slice(0,30)+'…':(t||'無題');
+}
+const STOP=new Set('の に は を が と て で も た し ない から まで より など する した ある いる こと これ それ ため よう もの です ます でした ました そして また しかし その この あの という'.split(' '));
+function terms(s){ const m=String(s).match(/[\u4E00-\u9FFF\u3005]{2,}|[\u30A1-\u30F6\u30FC]{2,}|[A-Za-z][A-Za-z0-9_-]{2,}/g)||[]; return m.filter(w=>!STOP.has(w)) }
+function summarize(text,maxS){
+  maxS=maxS||3;
+  const clean=String(text||'').replace(/\r/g,'').replace(/[ \t]+/g,' ').trim();
+  if(!clean)return'（本文が空です）';
+  const sents=clean.split(/(?<=[。．！？!?])|\n+/).map(s=>s.trim()).filter(s=>s.length>3);
+  if(sents.length<=maxS)return sents.join(' ')||clean.slice(0,160);
+  const freq={}; sents.forEach(s=>terms(s).forEach(w=>freq[w]=(freq[w]||0)+1));
+  const scored=sents.map((s,i)=>{const t=terms(s);let sc=0;t.forEach(w=>sc+=(freq[w]||0));sc=sc/Math.sqrt(t.length||1);
+    if(i===0)sc*=1.25; if(/まとめ|結論|重要|要点/.test(s))sc*=1.5; return{i,s,sc}});
+  const out=scored.sort((a,b)=>b.sc-a.sc).slice(0,maxS).sort((a,b)=>a.i-b.i).map(x=>x.s).join(' ');
+  return out.length>360?out.slice(0,360)+'…':out;
+}
+
+/* ================= 6. 記憶操作 ================= */
+const V={
+  bySeq(n){ return Vault.records.find(r=>r.seq===Number(n)) },
+  nextSeq(){ return Vault.records.reduce((m,r)=>Math.max(m,r.seq),0)+1 },
+  add(o){
+    const seq=this.nextSeq();
+    const body=o.body||'';
+    const rec={ id:'M-'+String(seq).padStart(4,'0'), seq, title:o.title||autoTitle(body),
+      body, tags:(o.tags&&o.tags.length?o.tags:autoTags(o.title+' '+body)), kind:o.kind||autoKind(body),
+      files:o.files||[], created:now(), updated:now(), source:o.source||'命令' };
+    Vault.records.unshift(rec); return rec;
+  },
+  analyzeAll(){
+    let changed=0;
+    Vault.records.forEach(r=>{
+      const t=autoTags(r.title+' '+r.body), k=autoKind(r.body);
+      if(t.join('/')!==r.tags.join('/')||k!==r.kind)changed++;
+      r.tags=t; r.kind=k;
+    });
+    return changed;
+  },
+  search(q){
+    const s=q.toLowerCase();
+    return Vault.records.filter(r=>(r.title+' '+r.body+' '+r.tags.join(' ')+' '+r.kind).toLowerCase().indexOf(s)>=0);
+  },
+  tagCounts(){
+    const m={}; Vault.records.forEach(r=>r.tags.forEach(t=>m[t]=(m[t]||0)+1));
+    return Object.keys(m).map(k=>[k,m[k]]).sort((a,b)=>b[1]-a[1]);
+  }
+};
+
+/* ================= 7. 命令の解釈 ================= */
+function norm(s){
+  return String(s)
+    .replace(/[\uFF10-\uFF19\uFF21-\uFF3A\uFF41-\uFF5A]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+    .replace(/[\u3000]/g,' ').replace(/\s+/g,' ').trim();
+}
+const RULES=[
+  ['help',/^(?:ヘルプ|使い方|何ができる|できること|コマンド一覧|コマンド|help|\?|？)$/i],
+  ['lock',/^(?:施錠|ロック|施錠して|ロックして|閉じる)$/i],
+  ['stats',/^(?:統計|状態|ステータス|件数|何件|いくつ|状況|サマリ|サマリー)$/i],
+  ['organize',/^(?:整理して|整理|分類して|仕分けして|タグ付けして|タグを整理して|タグを付け直して|自動整理)$/i],
+  ['list',/^(?:一覧|リスト|全部(?:を)?(?:見せて|出して|表示|表示して)|すべて(?:見せて|出して|表示)|記憶(?:を)?(?:見せて|出して)|在庫|全件)$/i],
+  ['recent',/^(?:(?:今日|本日)(?:の)?(?:記憶|ぶん)?(?:を)?(?:見せて|出して|教えて)?|(?:最近|直近)(?:の)?(?:記憶)?(?:を)?(?:見せて|出して|教えて))$/i],
+  ['export',/^(?:エクスポート|バックアップ|書き出して|出力して|出力|ダウンロード)$/i],
+  ['purge',/^(?:全部消して|全消去|初期化|リセット)$/i],
+  ['greet',/^(?:こんにちは|こんばんは|おはよう|やあ|ただいま|おつかれ|お疲れ様|hi|hello)/i],
+  ['save',/^(?:アルカ[、,]?\s*)?(?:覚えて|おぼえて|記憶して|きおくして|メモして|保存して|記録して|残して|ストックして)\s*[:：]?\s*([\s\S]+)$/],
+  ['save',/^([\s\S]+?)\s*を\s*(?:覚えて|おぼえて|記憶して|メモして|保存して|記録して|残して|ストックして)\s*$/],
+  ['open',/^(?:開いて|ひらいて|開け|展開|表示|見せて|出して|オープン)\s*[:：]?\s*(?:M[-\s]?)?(\d+)\s*番?$/i],
+  ['open',/^(?:記憶\s*)?(?:M[-\s]?)?(\d+)\s*番?\s*(?:を|の)?\s*(?:開いて|ひらいて|開け|展開して|展開|表示して|表示|見せて|出して|オープン)$/i],
+  ['open',/^(?:最後|最新|いちばん新しい|一番新しい)(?:の)?(?:記憶)?(?:を)?\s*(?:開いて|ひらいて|開け|見せて|出して|表示して|表示)$/],
+  ['open',/^(?:開いて|ひらいて|開け)$/],
+  ['delete',/^(?:記憶\s*)?(?:M[-\s]?)?(\d+)\s*番?\s*(?:を|の)?\s*(?:消して|削除して|けして|消去して|削除|破棄して|破棄)$/i],
+  ['copy',/^(?:記憶\s*)?(?:M[-\s]?)?(\d+)\s*番?\s*を?\s*(?:コピー|複製)(?:して)?$/i],
+  ['summarize',/^(?:要約|まとめて|サマリー|要点|要点をまとめて)\s*[:：]?\s*(?:M[-\s]?)?(\d+)?\s*番?$/i],
+  ['summarize',/^(?:記憶\s*)?(?:M[-\s]?)?(\d+)\s*番?\s*を?\s*(?:要約して|要約|まとめて|サマリーして)$/i],
+  ['summarize',/^(?:これ|選択中|選択中の記憶)(?:を)?\s*(?:要約して|要約|まとめて)$/],
+  ['tagadd',/^(?:記憶\s*)?(?:M[-\s]?)?(\d+)\s*番?\s*に\s*タグ\s*[:：]?\s*#?(\S+)\s*(?:を)?\s*(?:付けて|追加して|つけて|追加)$/i],
+  ['rename',/^(?:記憶\s*)?(?:M[-\s]?)?(\d+)\s*番?\s*の?\s*(?:タイトル|名前|件名)\s*を\s*([\s\S]+?)\s*に\s*(?:変えて|変更して|変更)$/i],
+  ['append',/^(?:記憶\s*)?(?:M[-\s]?)?(\d+)\s*番?\s*に\s*([\s\S]+?)\s*を?\s*(?:追記して|追記|付け足して|足して)$/i],
+  ['tagfilter',/^タグ\s*[:：]?\s*#?(\S+)\s*(?:の)?(?:記憶)?(?:を)?\s*(?:見せて|出して|探して|絞り込んで|一覧)?$/],
+  ['tagfilter',/^#(\S+)$/],
+  ['search',/^(?:探して|さがして|検索して|検索|サーチ|見つけて|find)\s*[:：]?\s*([\s\S]+)$/i],
+  ['search',/^([\s\S]+?)\s*を\s*(?:探して|さがして|検索して|見つけて)$/],
+  ['search',/^([\s\S]+?)\s*(?:についての)?記憶(?:を)?\s*(?:探して|検索して|見せて|出して|教えて)$/]
+];
+const YES=/^(?:はい|うん|よし|了解|りょうかい|実行|おk|ok|オーケー|yes|y)$/i;
+const NO=/^(?:いいえ|やめ|やめて|キャンセル|中止|no|n)$/i;
+function parse(t){
+  for(const r of RULES){ const m=t.match(r[1]); if(m)return{i:r[0],a:m.slice(1)} }
+  return{i:'unknown',a:[t]};
+}
+
+/* ================= 8. 記憶庫AI「アルカ」 ================= */
+const Core={
+  pending:null, sel:null,
+  async run(t){
+    if(this.pending){
+      const p=this.pending;
+      if(YES.test(t)){ this.pending=null; return p.go() }
+      if(NO.test(t)){ this.pending=null; return say('取り消しました。') }
+      this.pending=null;
+    }
+    const q=parse(t);
+    const a=q.a;
+    switch(q.i){
+      case 'save': return this.doSave(a[0]);
+      case 'open': return this.doOpen(a[0]);
+      case 'delete': return this.doDelete(a[0]);
+      case 'search': return this.doSearch(a[0]);
+      case 'summarize': return this.doSum(a[0]);
+      case 'organize': return this.doOrganize();
+      case 'list': return this.doList();
+      case 'recent': return this.doRecent();
+      case 'stats': return this.doStats();
+      case 'copy': return this.doCopy(a[0]);
+      case 'export': return doExport();
+      case 'tagadd': return this.doTagAdd(a[0],a[1]);
+      case 'rename': return this.doRename(a[0],a[1]);
+      case 'append': return this.doAppend(a[0],a[1]);
+      case 'tagfilter': return this.doTagFilter(a[0]);
+      case 'help': return this.doHelp();
+      case 'greet': return say('アルカ、待機しています。命令をどうぞ。記憶庫は '+Vault.records.length+' 件です。');
+      case 'lock': return lockNow();
+      case 'purge': return this.doPurge();
+      default: return this.doUnknown(t);
+    }
+  },
+  doSave(text){
+    let body=text.trim(), tags=[];
+    const tm=body.match(/#([^\s#]+)/g);
+    if(tm){ tags=tm.map(x=>x.slice(1)); body=body.replace(/#[^\s#]+/g,'').trim() }
+    const tm2=body.match(/タグ[:：]\s*([^\s]+)/); if(tm2){ tags.push(tm2[1]); body=body.replace(tm2[0],'').trim() }
+    if(!body)return say('本文が空です。『覚えて: 内容』の形でどうぞ。','err');
+    const rec=V.add({body,tags,source:'命令'});
+    setSel(rec); renderAll();
+    say('了解。記憶 '+rec.id+' として格納しました。'+this.brief(rec));
+    card(rec);
+    mini([['開く','open:'+rec.seq],['要約','sum:'+rec.seq]]);
+  },
+  brief(r){
+    const t=r.tags.length?' 分類: '+r.tags.join('・')+'。':'';
+    return ' 種別: '+r.kind+'。'+t;
+  },
+  doOpen(n){
+    const r=n?V.bySeq(n):Vault.records[0];
+    if(!r)return say(n?('記憶 M-'+String(n).padStart(4,'0')+' は存在しません。現在 '+Vault.records.length+' 件です。'):'記憶庫は空です。『覚えて: 内容』で最初の記憶を登録してください。','err');
+    setSel(r); openDrawer(r);
+    say('記憶 '+r.id+' を展開しました。'+this.brief(r));
+    card(r);
+  },
+  doDelete(n){
+    const r=V.bySeq(n);
+    if(!r)return say('記憶 M-'+String(n).padStart(4,'0')+' は存在しません。','err');
+    this.pending={go:()=>{
+      Vault.records=Vault.records.filter(x=>x.seq!==r.seq);
+      if(Core.sel&&Core.sel.seq===r.seq){Core.sel=null;closeDrawer()}
+      say('記憶 '+r.id+' を破棄しました。残り '+Vault.records.length+' 件。');
+      renderAll();
+    }};
+    say('記憶 '+r.id+'「'+r.title+'」を破棄します。よろしいですか？（はい / いいえ）');
+  },
+  doSearch(q){
+    const hit=V.search(q);
+    if(!hit.length)return say('「'+q+'」に該当する記憶はありません。条件を緩めますか、それとも『覚えて: '+q+'』で新規登録しますか。');
+    say(hit.length+' 件が該当しました。上位を表示します。');
+    hit.slice(0,6).forEach(card);
+  },
+  doSum(n){
+    const r=n?V.bySeq(n):(this.sel||Vault.records[0]);
+    if(!r)return say('要約する記憶がありません。','err');
+    const s=summarize(r.body,3);
+    say('記憶 '+r.id+' の要約です。');
+    const el=entry('ai'); el.querySelector('.txt').textContent=s; $('#log').appendChild(el); scrollLog();
+    if(!r.summary)r.summary=s;
+  },
+  doOrganize(){
+    const c=V.analyzeAll();
+    const tc=V.tagCounts();
+    say('全 '+Vault.records.length+' 件を走査しました。'+c+' 件を再分類。');
+    const el=entry('ai');
+    el.querySelector('.txt').textContent=tc.length?tc.map(x=>'・'+x[0]+' … '+x[1]+' 件').join('\n'):'タグはまだありません。';
+    $('#log').appendChild(el); scrollLog(); renderAll();
+  },
+  doList(){
+    if(!Vault.records.length)return say('記憶庫は空です。','err');
+    say('記憶庫の全 '+Vault.records.length+' 件です。番号を言えば展開します。');
+    Vault.records.slice(0,8).forEach(card);
+    if(Vault.records.length>8)say('ほか '+(Vault.records.length-8)+' 件。右の記憶庫一覧から選べます。');
+  },
+  doRecent(){
+    const today=new Date(); const y=today.getFullYear(),m=today.getMonth(),d=today.getDate();
+    const start=new Date(y,m,d).getTime();
+    const hit=Vault.records.filter(r=>r.updated>=start);
+    if(!hit.length)return say('本日の記憶はまだありません。');
+    say('本日は '+hit.length+' 件の記憶があります。');
+    hit.slice(0,6).forEach(card);
+  },
+  doStats(){
+    const n=Vault.records.length, chars=Vault.records.reduce((s,r)=>s+r.body.length,0), tags=V.tagCounts().length;
+    const el=entry('ai');
+    el.innerHTML='<div class="who">アルカ</div><div class="txt">記憶庫の状態です。</div>'+
+      '<div class="card"><div class="ct">記憶 '+n+' 件 / タグ '+tags+' 種 / 本文 '+chars.toLocaleString()+' 字</div>'+
+      '<div class="cm">暗号化: '+(SECURE?'AES-256-GCM（PBKDF2 25万回）':'無効（この環境では WebCrypto が使えません）')+' ／ 保存先: '+(Store.mode==='idb'?'IndexedDB':'localStorage')+'</div></div>';
+    $('#log').appendChild(el); scrollLog();
+  },
+  async doCopy(n){
+    const r=V.bySeq(n);
+    if(!r)return say('記憶 M-'+String(n).padStart(4,'0')+' は存在しません。','err');
+    try{ await navigator.clipboard.writeText(r.body); say('記憶 '+r.id+' の本文をクリップボードに転送しました。'); }
+    catch(e){ say('コピーできませんでした。詳細を開いて手動で選択してください。','err') }
+  },
+  doTagAdd(n,tag){
+    const r=V.bySeq(n);
+    if(!r)return say('記憶 M-'+String(n).padStart(4,'0')+' は存在しません。','err');
+    if(r.tags.indexOf(tag)<0)r.tags.push(tag);
+    r.updated=now(); say('記憶 '+r.id+' にタグ「'+tag+'」を付与しました。'); renderAll();
+  },
+  doRename(n,title){
+    const r=V.bySeq(n);
+    if(!r)return say('記憶 M-'+String(n).padStart(4,'0')+' は存在しません。','err');
+    r.title=title.trim(); r.updated=now();
+    say('記憶 '+r.id+' の表題を「'+r.title+'」に変更しました。'); renderAll();
+  },
+  doAppend(n,text){
+    const r=V.bySeq(n);
+    if(!r)return say('記憶 M-'+String(n).padStart(4,'0')+' は存在しません。','err');
+    r.body=(r.body?r.body+'\n':'')+text.trim(); r.updated=now();
+    const t=autoTags(r.title+' '+r.body); if(t.length)r.tags=Array.from(new Set(r.tags.concat(t))).slice(0,4);
+    say('記憶 '+r.id+' に追記しました。現在 '+r.body.length+' 字。'); renderAll();
+  },
+  doTagFilter(tag){
+    activeTag=tag; renderTags(); renderList();
+    const hit=Vault.records.filter(r=>r.tags.indexOf(tag)>=0);
+    say('タグ「'+tag+'」の記憶は '+hit.length+' 件です。一覧を絞り込みました。');
+    hit.slice(0,5).forEach(card);
+  },
+  doPurge(){
+    this.pending={go:async()=>{
+      await Vault.purge(); Core.sel=null; closeDrawer(); renderAll();
+      say('記憶庫を初期化しました。すべての記憶と暗号鍵は消去されました。');
+      await sleep(900); location.reload();
+    }};
+    say('記憶庫の全データと暗号鍵を消去します。取り消せません。実行しますか？（はい / いいえ）');
+  },
+  doHelp(){
+    const el=entry('ai');
+    el.querySelector('.txt').textContent=
+      '命令はひと続きの日本語で足ります。\n'+
+      '・記憶する   「覚えて: 明日10時に歯医者」「〜をメモして」\n'+
+      '・取り出す   「3番を開いて」「最後の記憶を開いて」「#仕事」\n'+
+      '・探す       「歯医者の予定を探して」「〜についての記憶」\n'+
+      '・要約する   「3番を要約して」「これをまとめて」\n'+
+      '・整える     「整理して」（分類とタグをAIが付け直します）\n'+
+      '・変える     「3番のタイトルを〜に変更」「3番にタグ 買い物 を追加」\n'+
+      '・捨てる     「3番を消して」（確認ののち実行）\n'+
+      '・俯瞰する   「一覧」「統計」「最近の記憶」「今日の記憶」\n'+
+      '・退避       「書き出して」（JSONを保存）／「施錠」\n'+
+      'ファイルは 📎 から取り込めます。取り込んだ記憶も番号で開けます。';
+    $('#log').appendChild(el); scrollLog();
+  },
+  async doUnknown(t){
+    const r=await llmAsk(t);
+    if(r){
+      if(r.say)say(r.say);
+      if(r.open){ const rec=V.bySeq(String(r.open).replace(/\D/g,'')); if(rec){setSel(rec);openDrawer(rec);card(rec)} }
+      if(r.save&&r.save.body){ const rec=V.add({title:r.save.title,body:r.save.body,tags:r.save.tags,source:'外部知能'}); setSel(rec); renderAll(); say('外部知能の判断で '+rec.id+' として格納しました。'); card(rec) }
+      return;
+    }
+    say('すみません、その命令は解釈できませんでした。','err');
+    const el=entry('ai');
+    el.querySelector('.txt').textContent='近い命令: 「覚えて: '+t.slice(0,40)+'」／「'+t.slice(0,20)+'を探して」／「ヘルプ」\nこのまま記憶として残すなら『覚えて: '+t.slice(0,60)+'』と入力してください。';
+    $('#log').appendChild(el); scrollLog();
+  }
+};
+
+/* ================= 9. 表示 ================= */
+let activeTag=null;
+const TAGCLS={'仕事':'k-work','アイデア':'k-idea','お金':'k-money','健康':'k-health','場所':'k-place'};
+const tagClass=t=>TAGCLS[t]||'';
+function coreMarkup(main,sub){
+  return '<div class="ring r-out"></div><div class="ring r-tick"></div><div class="ring r-sweep"></div>'+
+    '<div class="ring r-mid"></div><div class="ring r-in"></div><div class="glow"></div><div class="pip"></div>'+
+    '<div class="corelabel"><b>'+esc(main)+'</b>'+esc(sub)+'</div>';
+}
+function setLockCore(s){ $('#lockCore').innerHTML=coreMarkup(s,'MEMORY CORE'); }
+function entry(kind){
+  const d=document.createElement('div'); d.className='entry '+kind;
+  const who=document.createElement('div'); who.className='who';
+  who.textContent=kind==='me'?'運用者':(kind==='sys'?'艦内':'アルカ');
+  const t=document.createElement('div'); t.className='txt';
+  d.appendChild(who); d.appendChild(t); return d;
+}
+function scrollLog(){ const l=$('#log'); l.scrollTop=l.scrollHeight }
+function say(text,kind){
+  const el=entry(kind==='err'?'err':'ai');
+  el.querySelector('.txt').textContent=text;
+  $('#log').appendChild(el); scrollLog(); return el;
+}
+function mini(pairs){
+  const last=$('#log').lastElementChild; if(!last)return;
+  const w=document.createElement('div'); w.className='mini';
+  pairs.forEach(p=>{ const b=document.createElement('button'); b.type='button'; b.textContent=p[0]; b.dataset.cmd=p[1]; w.appendChild(b) });
+  last.appendChild(w); scrollLog();
+}
+function card(rec){
+  const el=document.createElement('div'); el.className='entry ai';
+  el.innerHTML='<div class="who">記憶 '+esc(rec.id)+'</div>'+
+    '<div class="card" data-id="'+rec.seq+'" role="button" tabindex="0">'+
+      '<div class="ct">'+esc(rec.title)+'</div>'+
+      '<div class="cm">'+esc(rec.kind)+' ・ '+esc(rec.tags.join('・')||'タグなし')+' ・ '+esc(rel(rec.updated))+' ・ '+rec.body.length+' 字</div>'+
+      '<div class="ct" style="color:var(--ink-faint);font-size:12px">'+esc(rec.body.replace(/\s+/g,' ').slice(0,110))+(rec.body.length>110?'…':'')+'</div>'+
+    '</div>';
+  $('#log').appendChild(el); scrollLog();
+}
+function renderStats(){
+  const n=Vault.records.length, chars=Vault.records.reduce((s,r)=>s+r.body.length,0);
+  $('#stats').innerHTML=
+    '<div><dt>記憶</dt><dd>'+n+'<small>件</small></dd></div>'+
+    '<div><dt>タグ</dt><dd>'+V.tagCounts().length+'<small>種</small></dd></div>'+
+    '<div><dt>本文</dt><dd>'+chars.toLocaleString()+'<small>字</small></dd></div>'+
+    '<div><dt>暗号</dt><dd style="font-size:11px;line-height:2.2">'+(SECURE?'AES-256':'無効')+'</dd></div>';
+}
+function renderTags(){
+  const tc=V.tagCounts(), bar=$('#tagbar'); bar.innerHTML='';
+  if(!tc.length){ bar.innerHTML='<span class="note">タグはまだありません。</span>'; return }
+  tc.slice(0,14).forEach(function(x){
+    const b=document.createElement('button'); b.type='button'; b.textContent='#'+x[0]+' '+x[1];
+    if(activeTag===x[0])b.classList.add('on');
+    b.onclick=function(){ activeTag=(activeTag===x[0]?null:x[0]); renderTags(); renderList() };
+    bar.appendChild(b);
+  });
+}
+function renderList(){
+  const q=norm($('#search').value);
+  let list=Vault.records;
+  if(activeTag)list=list.filter(r=>r.tags.indexOf(activeTag)>=0);
+  if(q)list=list.filter(r=>(r.title+' '+r.body+' '+r.tags.join(' ')).toLowerCase().indexOf(q.toLowerCase())>=0);
+  $('#recCount').textContent=Vault.records.length;
+  const box=$('#reclist');
+  if(!list.length){
+    box.innerHTML='<div class="empty">'+(Vault.records.length?'該当する記憶がありません。':'記憶庫は空です。<br><b>覚えて: 内容</b> で最初の記憶を登録してください。')+'</div>';
+    return;
+  }
+  box.innerHTML=list.map(r=>'<div class="rec'+(Core.sel&&Core.sel.seq===r.seq?' on':'')+'" data-id="'+r.seq+'" role="button" tabindex="0">'+
+    '<div class="r1"><span class="rid">'+esc(r.id)+'</span><span class="rt">'+esc(r.title)+'</span></div>'+
+    '<div class="r2">'+r.tags.slice(0,3).map(t=>'<span class="tag '+tagClass(t)+'">'+esc(t)+'</span>').join('')+
+    '<span class="tm">'+esc(rel(r.updated))+'</span></div></div>').join('');
+}
+function renderAll(){ renderStats(); renderTags(); renderList(); }
+function setSel(r){ Core.sel=r; renderList() }
+function toast(msg,kind){
+  const d=document.createElement('div'); d.className='toast'+(kind==='err'?' err':''); d.textContent=msg;
+  $('#toasts').appendChild(d); setTimeout(()=>{ d.style.opacity='0'; setTimeout(()=>d.remove(),300) },2600);
+}
+function ripple(){
+  if(REDUCED)return;
+  const r=document.createElement('div'); r.className='ripple';
+  $('#core').appendChild(r); setTimeout(()=>r.remove(),1300);
+}
+function setBusy(v){
+  $('#core').classList.toggle('busy',v);
+  $('#aiStatus').classList.toggle('busy',v);
+  $('#aiStatusTxt').textContent=v?'実行中':'待機';
+  $('#cmdform').classList.toggle('busy',v);
+  $('#coreState').textContent=v?'実行中':'待機中';
+  $('#coreState').classList.toggle('idle',!v);
+  $('#deckHint').textContent=v?'アルカが処理しています…':'アルカが待機しています';
+  $('#btnRun').disabled=v;
+}
+function openDrawer(r){
+  setSel(r);
+  $('#dId').textContent=r.id;
+  $('#dKind').textContent=r.kind;
+  $('#dTitle').textContent=r.title;
+  $('#dMeta').textContent='登録 '+fmtDate(r.created)+' ／ 更新 '+fmtDate(r.updated)+' ／ '+r.body.length+' 字 ／ 由来 '+r.source;
+  $('#dTags').innerHTML=r.tags.map(t=>'<span class="tag '+tagClass(t)+'">'+esc(t)+'</span>').join('')||'<span class="note">タグなし</span>';
+  $('#dBody').textContent=r.body;
+  $('#dFiles').innerHTML=(r.files||[]).map(f=>'<a href="'+f.data+'" download="'+esc(f.name)+'">📄 '+esc(f.name)+'<span class="fs">'+Math.max(1,Math.round(f.size/1024))+' KB</span></a>').join('');
+  $('#drawer').hidden=false;
+  $('#drawer').dataset.seq=r.seq;
+}
+function closeDrawer(){ $('#drawer').hidden=true }
+
+/* ================= 10. 外部知能リンク（任意） ================= */
+async function llmAsk(cmd){
+  const cfg=await Store.get('llm');
+  if(!cfg||!cfg.url||!cfg.key)return null;
+  try{
+    const ctx=Vault.records.slice(0,40).map(r=>r.id+' '+r.title).join('\n');
+    const res=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
+      body:JSON.stringify({model:cfg.model||'gpt-4o-mini',temperature:0.3,messages:[
+        {role:'system',content:'あなたは記憶庫AI「アルカ」。艦載AIとして簡潔な日本語で応答する。必ずJSONのみを返す: {"say":"応答文","open":null または "M-0001","save":null または {"title":"","body":"","tags":[]}}'},
+        {role:'user',content:'記憶一覧:\n'+ctx+'\n\n命令: '+cmd}]})});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const j=await res.json();
+    const txt=(j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content)||'';
+    const m=txt.match(/\{[\s\S]*\}/);
+    return m?JSON.parse(m[0]):null;
+  }catch(e){ return null }
+}
+
+/* ================= 11. 取り込み ================= */
+async function handleFiles(files){
+  let n=0;
+  for(const f of Array.from(files)){
+    if(f.size>1024*1024){ toast('「'+f.name+'」は1MBを超えるため取り込めません。','err'); continue }
+    const buf=await f.arrayBuffer(), bytes=new Uint8Array(buf);
+    const dataUrl='data:'+(f.type||'application/octet-stream')+';base64,'+b64e(bytes);
+    const isText=/^text\/|json|xml|csv|javascript|markdown|yaml/.test(f.type)||/\.(txt|md|csv|json|log|ya?ml|html?|css|js|ts|py|rb|go|rs|java|sh|sql)$/i.test(f.name);
+    let text='';
+    if(isText){ try{ text=new TextDecoder().decode(bytes) }catch(e){ text='' } }
+    const body=isText?(text||'（空のファイル）'):'（'+f.type+' ファイル / '+Math.max(1,Math.round(f.size/1024))+' KB）';
+    const rec=V.add({title:f.name,body,tags:autoTags(f.name+' '+text).concat(['ファイル']).filter((v,i,a)=>a.indexOf(v)===i).slice(0,3),
+      kind:isText?'ファイル':'画像',files:[{name:f.name,size:f.size,type:f.type,data:dataUrl}],source:'取り込み'});
+    setSel(rec); n++;
+    say('「'+f.name+'」を取り込み、記憶 '+rec.id+' として格納しました。'+Core.brief(rec));
+    card(rec);
+  }
+  if(n){ renderAll(); toast(n+' 件を取り込みました。') }
+  else toast('取り込めるファイルがありませんでした。','err');
+}
+async function doExport(){
+  const data={app:'ARCA',exported:new Date().toISOString(),count:Vault.records.length,
+    note:'本文のみ。取り込んだファイルの実体は含まれません。',
+    records:Vault.records.map(r=>({id:r.id,title:r.title,body:r.body,tags:r.tags,kind:r.kind,
+      created:new Date(r.created).toISOString(),updated:new Date(r.updated).toISOString(),files:(r.files||[]).map(f=>f.name)}))};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='arca-memories-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  say('記憶 '+Vault.records.length+' 件を平文JSONで書き出しました。取り扱いにご注意ください。');
+}
+
+/* ================= 12. 命令の投入 ================= */
+async function submit(raw){
+  const t=norm(raw);
+  if(!t)return;
+  $('#cmd').value='';
+  const me=entry('me'); me.querySelector('.txt').textContent=raw; $('#log').appendChild(me); scrollLog();
+  setBusy(true); ripple();
+  await sleep(REDUCED?10:150);
+  try{ await Core.run(t) }
+  catch(e){ say('内部エラー: '+((e&&e.message)||e),'err') }
+  try{ await Vault.save() }catch(e){}
+  renderAll(); setBusy(false);
+  $('#cmd').focus();
+}
+
+/* ================= 13. 解錠 / 初期設定 ================= */
+let pendingCred=null;
+function lockErr(msg,ok){ const e=$('#lockErr'); e.className=ok?'err ok':'err'; e.textContent=msg||'' }
+async function tryPasskey(){
+  lockErr(''); setLockCore('認証中');
+  try{
+    const r=await Vault.unlockPasskey();
+    if(r.ok)return enterApp();
+    if(r.needPass){ lockErr(r.msg); $('#unlockPass').focus() }
+    else lockErr(r.msg||'認証できませんでした。');
+  }catch(ex){ lockErr('パスキーを利用できませんでした。パスコードをお使いください。') }
+  setLockCore('施錠');
+}
+async function tryPass(){
+  const v=$('#unlockPass').value;
+  if(!v)return lockErr('パスコードを入力してください。');
+  if(Vault.meta&&Vault.meta.passkeyRequired)return lockErr('この記憶庫はパスキー専用です。顔認証で解錠してください。');
+  setLockCore('照合中');
+  const r=await Vault.unlockPass(v);
+  if(r.ok)return enterApp();
+  lockErr(r.msg); $('#unlockPass').value=''; setLockCore('施錠');
+}
+function showLock(hasMeta){
+  $('#lock').hidden=false; lockErr('');
+  if(!hasMeta){
+    $('#paneSetup').hidden=false; $('#paneUnlock').hidden=true;
+    $('#lockMsg').textContent='初期設定です。マスター パスコードを決めてください。記憶庫はこのパスコードから導いた鍵で暗号化されます。';
+    if(!Auth.can){ $('#btnRegPasskey').disabled=true; $('#pkNote').innerHTML=Auth.explain()+'<br><b>いまはパスコードのみ</b>で起動し、設置後に「設定」からパスキーを登録できます。'; }
+    if(!SECURE)lockErr('この環境では暗号化を利用できません。HTTPSで開いてください。');
+    $('#setPass').focus();
+  }else{
+    $('#paneSetup').hidden=true; $('#paneUnlock').hidden=false;
+    const _req=!!(Vault.meta&&Vault.meta.passkeyRequired);
+    const _row=document.querySelector('#paneUnlock .row'); if(_row)_row.style.display=_req?'none':'';
+    $('#lockMsg').textContent=(Vault.meta&&Vault.meta.owner?Vault.meta.owner+' の記憶庫です。':'')+'解錠してください。';
+    const has=!!Vault.meta.passkey;
+    $('#btnPasskey').style.display=(has&&Auth.can)?'':'none';
+    $('#unlockHint').innerHTML=has?(Auth.can?'パスキーは端末の指紋・顔・PINで認証します。':'登録済みですが、この環境ではパスキーを使えません。'):'パスキーは未登録です。パスコードで解錠してください。';
+    $('#unlockPass').focus();
+  }
+  if(!SECURE)lockErr('注意: この環境では暗号化を有効にできません。');
+}
+function enterApp(){
+  $('#lock').hidden=true; $('#app').hidden=false;
+  document.body.classList.add('unlocked');
+  renderAll(); setBusy(false);
+  const n=Vault.records.length;
+  say(n?('解錠しました。記憶庫に '+n+' 件の記憶があります。ご命令を。'):'解錠しました。記憶庫は空です。『覚えて: 内容』で最初の記憶を登録してください。');
+  renderChips(); $('#cmd').focus();
+}
+function renderChips(){
+  const list=['覚えて: 明日10時に歯医者','3番を開いて','整理して','統計','最近の記憶','ヘルプ'];
+  const c=$('#chips'); c.innerHTML='';
+  list.forEach(t=>{ const b=document.createElement('button'); b.type='button'; b.textContent=t; b.onclick=()=>submit(t); c.appendChild(b) });
+}
+function lockNow(){
+  closeDrawer(); $('#settings').hidden=true;
+  Vault.lock();
+  $('#app').hidden=true; document.body.classList.remove('unlocked');
+  $('#unlockPass').value='';
+  showLock(!!Vault.meta);
+}
+
+/* ================= 14. 設定 ================= */
+async function updatePkState(){
+  const p=Vault.meta&&Vault.meta.passkey;
+  $('#sPkState').innerHTML=p?('登録済み（'+esc(new Date(p.at).toLocaleString('ja-JP'))+'）。パスキーで解錠できます。'):
+    '未登録です。登録すると指紋・顔・端末PINで解錠できます。';
+  if(!Auth.can)$('#sPkState').innerHTML+='<br>'+Auth.explain();
+  $('#sPkReg').disabled=!Auth.can; $('#sPkDel').disabled=!p;
+}
+async function loadSettings(){
+  const cfg=(await Store.get('llm'))||{};
+  $('#llmUrl').value=cfg.url||''; $('#llmModel').value=cfg.model||''; $('#llmKey').value=cfg.key||'';
+  $('#sAutoLock').value=String(Vault.autoLockMin);
+  await refreshSeal();
+  $('#sStore').textContent=(Store.mode==='idb'?'IndexedDB':'localStorage')+' に暗号文を保存しています。暗号化: '+(SECURE?'有効（AES-256-GCM / PBKDF2 25万回）':'無効');
+  updatePkState();
+}
+
+/* ================= 15. 配線 ================= */
+$('#cmdform').addEventListener('submit',e=>{ e.preventDefault(); submit($('#cmd').value) });
+$('#search').addEventListener('input',renderList);
+$('#btnLock').addEventListener('click',lockNow);
+$('#btnAttach').addEventListener('click',()=>$('#fileInput').click());
+$('#fileInput').addEventListener('change',e=>{ handleFiles(e.target.files); e.target.value='' });
+$('#btnExport2').addEventListener('click',doExport);
+$('#btnSettings').addEventListener('click',async()=>{ await loadSettings(); $('#settings').hidden=false });
+$('#sClose').addEventListener('click',()=>$('#settings').hidden=true);
+$('#dClose').addEventListener('click',closeDrawer);
+$('#log').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-cmd]'); if(b){ submit(b.dataset.cmd); return }
+  const c=e.target.closest('.card[data-id]'); if(c){ const r=V.bySeq(c.dataset.id); if(r)openDrawer(r) }
+});
+$('#reclist').addEventListener('click',e=>{
+  const c=e.target.closest('.rec[data-id]'); if(!c)return;
+  const r=V.bySeq(c.dataset.id); if(!r)return;
+  setSel(r); openDrawer(r);
+  say('記憶 '+r.id+' を展開しました。'+Core.brief(r)); card(r);
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ closeDrawer(); $('#settings').hidden=true }
+  if(e.key==='/'&&document.activeElement!==$('#cmd')&&document.activeElement!==$('#search')){ e.preventDefault(); $('#cmd').focus() }
+});
+$('#dCopy').addEventListener('click',async()=>{ if(!Core.sel)return; try{ await navigator.clipboard.writeText(Core.sel.body); toast('本文をコピーしました。') }catch(e){ toast('コピーできませんでした。','err') } });
+$('#dSum').addEventListener('click',()=>{ if(Core.sel)Core.doSum(String(Core.sel.seq)) });
+$('#dRename').addEventListener('click',()=>{ if(!Core.sel)return; const t=prompt('新しい表題',Core.sel.title); if(t)Core.doRename(String(Core.sel.seq),t) });
+$('#dTagAdd').addEventListener('click',()=>{ if(!Core.sel)return; const t=prompt('追加するタグ（#は不要）',''); if(t)Core.doTagAdd(String(Core.sel.seq),t.trim()) });
+$('#dDelete').addEventListener('click',()=>{ if(Core.sel)Core.doDelete(String(Core.sel.seq)) });
+$('#btnCreate').addEventListener('click',async()=>{
+  const p=$('#setPass').value, p2=$('#setPass2').value;
+  if(!SECURE)return lockErr('この環境では暗号化を利用できません。HTTPSで開いてください。');
+  if(p.length<6)return lockErr('パスコードは6文字以上にしてください。');
+  if(p!==p2)return lockErr('確認用のパスコードが一致しません。');
+  $('#btnCreate').disabled=true; $('#lockMsg').textContent='暗号鍵を生成しています…（数秒かかります）'; setLockCore('生成中');
+  try{
+    await Vault.create(p);
+    if(pendingCred){ Vault.meta.passkey={id:pendingCred,at:now()}; await Vault.quickUnlock() }
+    await Vault.saveMeta();
+    enterApp();
+  }catch(ex){ lockErr('作成に失敗しました（'+((ex&&ex.message)||'エラー')+'）。'); $('#btnCreate').disabled=false; setLockCore('施錠') }
+});
+$('#btnRegPasskey').addEventListener('click',async()=>{
+  lockErr(''); setLockCore('登録中');
+  try{ pendingCred=await Auth.register('operator'); lockErr('パスキーを登録しました。このまま記憶庫を起動してください。',true) }
+  catch(ex){ pendingCred=null; lockErr('登録できませんでした（'+((ex&&ex.name)||'エラー')+'）'+((ex&&ex.message)?': '+ex.message:'')+' パスコードのみで続行できます。') }
+  setLockCore('施錠');
+});
+$('#btnPasskey').addEventListener('click',tryPasskey);
+$('#btnUnlockPass').addEventListener('click',tryPass);
+$('#unlockPass').addEventListener('keydown',e=>{ if(e.key==='Enter')tryPass() });
+$('#setPass2').addEventListener('keydown',e=>{ if(e.key==='Enter')$('#btnCreate').click() });
+$('#btnLlmSave').addEventListener('click',async()=>{
+  await Store.set('llm',{url:$('#llmUrl').value.trim(),model:$('#llmModel').value.trim(),key:$('#llmKey').value.trim()});
+  toast('外部知能リンクを保存しました。');
+});
+$('#sAutoLock').addEventListener('change',async()=>{
+  Vault.autoLockMin=Number($('#sAutoLock').value);
+  if(Vault.meta){ Vault.meta.autoLockMin=Vault.autoLockMin; await Vault.saveMeta() }
+  toast(Vault.autoLockMin?('自動施錠: '+Vault.autoLockMin+'分'):'自動施錠を停止しました。');
+});
+async function passkeyDiag(){
+  const uv=await Auth.uvpaa();
+  const rows=[
+    '表示方法: '+(IS_FRAME?'埋め込みプレビュー → パスキー不可':'通常ページ → OK'),
+    'HTTPS接続: '+(SECURE?'あり → OK':'なし → パスキー不可'),
+    'ブラウザ対応: '+(HAS_PKC?'あり → OK':'なし → 非対応'),
+    '端末の生体認証: '+(uv?'利用可能 → OK':'利用不可（顔/指紋/PINが未設定の可能性）'),
+    '登録済みパスキー: '+(Vault.meta&&Vault.meta.passkey?'あり':'なし'),
+    '現在のURL: '+(location.origin==='null'?'（ローカルファイル）':location.origin)
+  ];
+  $('#sPkDiagOut').innerHTML=rows.map(function(r){return esc(r)}).join('<br>');
+  toast('診断結果を表示しました。');
+}
+$('#sPkDiag').addEventListener('click',passkeyDiag);
+$('#sPkReg').addEventListener('click',async()=>{
+  try{ const id=await Auth.register('operator');
+    Vault.meta.passkey={id,at:now()}; await Vault.quickUnlock(); await Vault.saveMeta();
+    updatePkState(); toast('パスキーを登録しました。');
+  }catch(ex){ toast('登録できませんでした（'+((ex&&ex.name)||'エラー')+'）','err'); say('パスキー登録エラー: '+((ex&&ex.name)||'')+' '+((ex&&ex.message)||''),'err') }
+});
+$('#sPkDel').addEventListener('click',async()=>{
+  if(!confirm('パスキー登録を解除しますか？（パスコードでの解錠は残ります）'))return;
+  Vault.meta.passkey=null; Vault.meta.devKey=null; Vault.meta.wrapDev=null; Vault.meta.passkeyRequired=false;
+  await Vault.saveMeta(); updatePkState(); toast('パスキー登録を解除しました。');
+});
+$('#sExport').addEventListener('click',doExport);
+$('#sPurge').addEventListener('click',()=>Core.doPurge());
+$('#bootCore').innerHTML=coreMarkup('ARCA','WAVE CORE');
+$('#lockCore').innerHTML=coreMarkup('施錠','MEMORY CORE');
+$('#core').innerHTML=coreMarkup('ARCA','WAVE CORE');
+
+/* ================= 16. 時計・自動施錠 ================= */
+function tick(){
+  try{
+    const s=new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date());
+    $('#clock').innerHTML=esc(s)+'<em>JST</em>';
+  }catch(e){}
+}
+setInterval(tick,1000); tick();
+let lastAct=now();
+['click','keydown','mousemove','touchstart','scroll'].forEach(ev=>document.addEventListener(ev,()=>{lastAct=now()},{passive:true}));
+setInterval(()=>{
+  if($('#app').hidden)return;
+  if(Vault.autoLockMin>0 && (now()-lastAct)/60000>=Vault.autoLockMin){ lockNow(); toast('自動施錠しました。') }
+},10000);
+
+/* ================= 17. 起動 ================= */
+async function bootSeq(){
+  const log=$('#bootlog');
+  const lines=[['記憶方舟アルカ 起動シーケンス',''],['波動コア','正常'],['暗号モジュール',SECURE?'AES-256-GCM':'無効'],
+    ['記憶域',Store.mode==='idb'?'IndexedDB':'localStorage'],['パスキー',Auth.can?'利用可能':'利用不可'],['ローカル推論コア','待機']];
+  for(let i=0;i<lines.length;i++){
+    const d=document.createElement('div');
+    d.innerHTML='&gt; '+esc(lines[i][0])+(lines[i][1]?' <b>… '+esc(lines[i][1])+'</b>':'');
+    log.appendChild(d); await sleep(REDUCED?15:190);
+  }
+  await sleep(REDUCED?15:280);
+  $('#boot').hidden=true;
+}
+(async function main(){
+  try{
+    await Store.init();
+    if(Store.mode==='none'){
+      $('#boot').hidden=true; $('#lock').hidden=false;
+      $('#paneSetup').hidden=false; $('#btnCreate').disabled=true;
+      lockErr('この表示環境では保存域を利用できません。ファイルをブラウザで直接開くか、HTTPSのページとして配置してください。');
+      return;
+    }
+    await bootSeq();
+    const meta=await Vault.boot();
+    showLock(!!meta);
+  }catch(e){
+    $('#boot').hidden=true;
+    $('#lock').hidden=false;
+    $('#paneSetup').hidden=false;
+    lockErr('起動に失敗しました: '+((e&&e.message)||e));
+  }
+})();
+
+/* ================= 18. 通信アレイ用スタイル ================= */
+(function(){
+  const s=document.createElement('style');
+  s.textContent='.cmsec{display:grid;gap:9px;padding:13px 0;border-bottom:1px solid var(--line-soft)}'+
+    '.cmsec:last-child{border-bottom:none}.cmsec .ph{margin:0}'+
+    '.cmhead{display:flex;align-items:center;gap:9px;flex-wrap:wrap}'+
+    '.cmhead .nm{font-family:var(--font-display);font-size:16px;letter-spacing:.06em}'+
+    '.badge{font-family:var(--font-mono);font-size:9.5px;padding:2px 8px;border:1px solid var(--line);border-radius:999px;color:var(--ink-faint);white-space:nowrap}'+
+    '.badge.on{border-color:var(--teal);color:var(--teal)}'+
+    '.badge.warn{border-color:var(--amber-dim);color:var(--amber-soft)}'+
+    '.badge.no{border-color:rgba(217,92,74,.5);color:#E88B7C}'+
+    '.codebox{background:#080D18;border:1px solid var(--line-soft);padding:9px 11px;font-family:var(--font-mono);font-size:10.5px;line-height:1.7;color:var(--ink-dim);white-space:pre-wrap;max-height:190px;overflow:auto}';
+  document.head.appendChild(s);
+})();
+
+/* ================= 19. Gmail（ブラウザから直接接続） ================= */
+function b64url(u8){ let s=btoa(String.fromCharCode.apply(null,u8)); return s.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'') }
+function utf8b64(str){ return btoa(unescape(encodeURIComponent(str))) }
+const Gmail={
+  token:null,
+  async cfg(){ return (await Store.get('gmail'))||{} },
+  async saveCfg(o){ await Store.set('gmail',o) },
+  loadGIS(){
+    return new Promise(function(res,rej){
+      if(window.google&&window.google.accounts&&window.google.accounts.oauth2)return res();
+      const s=document.createElement('script');
+      s.src='https://accounts.google.com/gsi/client'; s.async=true; s.defer=true;
+      s.onload=function(){res()};
+      s.onerror=function(){rej(new Error('Google認証モジュールを読み込めませんでした（通信環境をご確認ください）'))};
+      document.head.appendChild(s);
+    });
+  },
+  async connect(){
+    const c=await this.cfg();
+    if(!c.clientId)throw new Error('先にクライアントIDを保存してください');
+    await this.loadGIS();
+    const self=this;
+    return new Promise(function(res,rej){
+      let done=false;
+      const tc=google.accounts.oauth2.initTokenClient({
+        client_id:c.clientId,
+        scope:'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
+        callback:function(resp){
+          if(resp&&resp.error){ if(!done){done=true;rej(new Error(resp.error))} return }
+          self.token=resp.access_token;
+          if(!done){done=true;res(resp)}
+        },
+        error_callback:function(e){ if(!done){done=true;rej(new Error((e&&e.type)||'認証が完了しませんでした'))} }
+      });
+      try{ tc.requestAccessToken() }catch(e){ if(!done){done=true;rej(e)} }
+    });
+  },
+  async api(path,opts){
+    if(!this.token)throw new Error('Gmailに接続していません');
+    const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me'+path,
+      Object.assign({headers:{Authorization:'Bearer '+this.token}},opts||{}));
+    if(r.status===401){ this.token=null; throw new Error('認証の有効期限が切れました。もう一度接続してください') }
+    if(!r.ok)throw new Error('Gmail API エラー（HTTP '+r.status+'）');
+    return r.json();
+  },
+  async list(q,max){
+    const s=await this.api('/messages?maxResults='+(max||10)+'&q='+encodeURIComponent(q||'in:inbox'));
+    const ids=(s.messages||[]).map(function(m){return m.id});
+    const out=[];
+    for(const id of ids){
+      const m=await this.api('/messages/'+id+'?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date');
+      const h={}; ((m.payload&&m.payload.headers)||[]).forEach(function(x){h[x.name]=x.value});
+      out.push({id:id,from:h.From||'',subject:h.Subject||'(件名なし)',date:h.Date||'',snippet:m.snippet||'',unread:(m.labelIds||[]).indexOf('UNREAD')>=0});
+    }
+    return out;
+  },
+  async send(to,subject,body){
+    const msg=['To: '+to,'Subject: =?UTF-8?B?'+utf8b64(subject)+'?=','MIME-Version: 1.0',
+      'Content-Type: text/plain; charset="UTF-8"','Content-Transfer-Encoding: base64','',utf8b64(body)].join('\r\n');
+    await this.api('/messages/send',{method:'POST',
+      headers:{Authorization:'Bearer '+this.token,'Content-Type':'application/json'},
+      body:JSON.stringify({raw:b64url(new TextEncoder().encode(msg))})});
+  }
+};
+async function ensureGmail(){ if(!Gmail.token) await Gmail.connect() }
+function mailCard(m){
+  const el=entry('ai');
+  el.innerHTML='<div class="who">メール'+(m.unread?' ・ 未読':'')+'</div>'+
+    '<div class="card"><div class="ct">'+esc(m.subject)+'</div>'+
+    '<div class="cm">'+esc(m.from)+' ・ '+esc(m.date)+'</div>'+
+    '<div class="ct" style="color:var(--ink-faint);font-size:12px">'+esc(m.snippet)+'</div></div>';
+  $('#log').appendChild(el); scrollLog();
+}
+
+/* ================= 20. 通信アレイ（パネル） ================= */
+function renderComm(){
+  const b=$('#commBody');
+  b.innerHTML=
+  '<section class="cmsec">'+
+    '<div class="cmhead"><span class="nm">Gmail</span><span class="badge '+(Gmail.token?'on':'warn')+'" id="gmBadge">'+(Gmail.token?'接続中':'未接続')+'</span></div>'+
+    '<p class="note">ブラウザから直接Gmail APIに接続します。クライアントIDは公開情報で、秘密鍵は不要です。アクセストークンは端末に保存しません。</p>'+
+    '<label class="fld"><span>OAuth クライアントID</span><input type="text" id="gmId" placeholder="xxxxxxxx.apps.googleusercontent.com"></label>'+
+    '<div class="row"><button class="btn" id="gmSave" type="button">IDを保存</button><button class="btn primary" id="gmConnect" type="button">Gmailと接続</button></div>'+
+    '<div class="row"><button class="btn" id="gmList" type="button">受信トレイを見る</button><button class="btn" id="gmImport" type="button">未読を取り込む</button></div>'+
+    '<div class="ph" style="margin-top:4px">メール送信</div>'+
+    '<label class="fld"><span>宛先</span><input type="text" id="gmTo" placeholder="someone@example.com"></label>'+
+    '<label class="fld"><span>件名</span><input type="text" id="gmSub"></label>'+
+    '<label class="fld"><span>本文</span><textarea id="gmBodyTxt" rows="4"></textarea></label>'+
+    '<button class="btn" id="gmSend" type="button">送信する</button>'+
+  '</section>'+
+  '<section class="cmsec">'+
+    '<div class="cmhead"><span class="nm">LINE</span><span class="badge warn">ブリッジ経由・送信のみ</span></div>'+
+    '<p class="note"><b>正直な制約</b>: LINEの個人アカウントのトーク履歴は、公式APIでは<b>取得できません</b>（仕様上の制限で回避不能）。読み取り・返信の完全管理は不可能です。'+
+    'できるのは<b>あなたのLINEへ通知を送る</b>ことだけで、それにはサーバー側の処理が必要なため、無料の Google Apps Script をブリッジとして使います。'+
+    'また <b>LINE Notify は 2025年3月31日で終了</b>しており、正規の後継は Messaging API です。</p>'+
+    '<button class="btn" id="lineCopy" type="button">ブリッジ用コードをコピー</button>'+
+  '</section>'+
+  '<section class="cmsec">'+
+    '<div class="cmhead"><span class="nm">メール（IMAP / 他社）</span><span class="badge no">ブラウザ不可・ブリッジ経由</span></div>'+
+    '<p class="note">ブラウザからIMAPサーバーへ直接接続することはできません（セキュリティ上の制限）。'+
+    'Gmailをお使いなら、Gmail側の「<b>他のアカウントのメールを確認</b>」で他社メールをGmailに集約すれば、この連携でまとめて扱えます。'+
+    '集約しない場合は Google Apps Script の <span class="mono">GmailApp</span> をブリッジにしてください。</p>'+
+    '<button class="btn" id="imapCopy" type="button">ブリッジ用コードをコピー</button>'+
+  '</section>'+
+  '<section class="cmsec">'+
+    '<div class="cmhead"><span class="nm">外部知能</span><span class="badge '+(llmConfigured?'on':'')+'" id="llmBadge">'+(llmConfigured?'設定済み':'未設定')+'</span></div>'+
+    '<p class="note">ローカルの解釈器が拾えなかった命令を外部AIに委ねます。左の「外部知能リンク」で設定できます。</p>'+
+  '</section>';
+  const c=$('#gmId'); if(c)Gmail.cfg().then(function(cf){ if(cf.clientId)c.value=cf.clientId });
+  $('#gmSave').onclick=async function(){
+    const v=$('#gmId').value.trim();
+    const cf=await Gmail.cfg(); cf.clientId=v; await Gmail.saveCfg(cf);
+    toast(v?'クライアントIDを保存しました。':'クライアントIDを消去しました。');
+  };
+  $('#gmConnect').onclick=async function(){
+    try{ await Gmail.connect(); toast('Gmailに接続しました。'); renderComm(); say('Gmailと接続しました。受信トレイを読み、未読を記憶庫に取り込めます。') }
+    catch(e){ toast('接続できませんでした','err'); say('Gmail接続エラー: '+((e&&e.message)||e),'err') }
+  };
+  $('#gmList').onclick=function(){ Comm.mailList() };
+  $('#gmImport').onclick=function(){ Comm.mailImport() };
+  $('#gmSend').onclick=async function(){
+    const to=$('#gmTo').value.trim(), sub=$('#gmSub').value.trim(), bd=$('#gmBodyTxt').value.trim();
+    if(!to||!sub){ toast('宛先と件名を入力してください。','err'); return }
+    try{ await ensureGmail(); await Gmail.send(to,sub,bd);
+      toast('送信しました。'); say('メールを送信しました → '+to+'（'+sub+'）');
+      $('#gmSub').value=''; $('#gmBodyTxt').value='';
+      V.add({title:'送信: '+sub,body:'宛先: '+to+'\n\n'+bd,tags:['メール','送信'],kind:'メール',source:'Gmail'});
+      renderAll();
+    }catch(e){ toast('送信できませんでした','err'); say('送信エラー: '+((e&&e.message)||e),'err') }
+  };
+  const gasHint=function(){
+    say('ブリッジ用のコードは、お渡ししたパッケージ内の bridge-gas.js にあります。Google Apps Script に貼り付けて設置してください。');
+    say('設置手順: script.google.com で新規プロジェクト → bridge-gas.js の内容を貼る → スクリプト プロパティに LINE_TOKEN と LINE_TO を登録 → installTriggers を実行。');
+  };
+  $('#lineCopy').onclick=gasHint;
+  $('#imapCopy').onclick=gasHint;
+}
+let llmConfigured=false;
+async function refreshLlmBadge(){ const c=await Store.get('llm'); llmConfigured=!!(c&&c.url&&c.key) }
+
+/* ================= 21. 通信コマンド ================= */
+const Comm={
+  async mailList(){
+    setBusy(true);
+    try{
+      await ensureGmail();
+      const ms=await Gmail.list('in:inbox',8);
+      const un=ms.filter(function(m){return m.unread}).length;
+      say('受信トレイの直近 '+ms.length+' 件を取得しました。うち未読 '+un+' 件。');
+      ms.forEach(mailCard);
+      $('#comm').hidden=true;
+    }catch(e){ say('Gmail: '+((e&&e.message)||e),'err') }
+    finally{ setBusy(false) }
+  },
+  async mailImport(){
+    setBusy(true);
+    try{
+      await ensureGmail();
+      const ms=await Gmail.list('in:inbox is:unread',8);
+      if(!ms.length){ say('未読メールはありません。'); return }
+      ms.forEach(function(m){
+        V.add({title:m.subject,body:m.from+'  /  '+m.date+'\n\n'+m.snippet,tags:['メール','Gmail'],kind:'メール',source:'Gmail'});
+      });
+      renderAll();
+      say('未読 '+ms.length+' 件を記憶庫に取り込みました。番号で開けます。');
+      Vault.records.slice(0,ms.length).forEach(card);
+      $('#comm').hidden=true;
+    }catch(e){ say('Gmail: '+((e&&e.message)||e),'err') }
+    finally{ setBusy(false) }
+  },
+  async status(){
+    await refreshLlmBadge();
+    const g=await Gmail.cfg();
+    const el=entry('ai');
+    el.innerHTML='<div class="who">アルカ</div><div class="txt">通信アレイの接続状況です。</div><div class="card">'+
+      '<div class="ct">Gmail — '+(Gmail.token?'接続中':(g.clientId?'ID設定済み・未接続':'未設定'))+'</div>'+
+      '<div class="ct">LINE — 送信のみ（要ブリッジ）／ 受信は仕様上不可</div>'+
+      '<div class="ct">他社メール — 要ブリッジ または Gmailへの集約</div>'+
+      '<div class="ct">外部知能 — '+(llmConfigured?'設定済み':'未設定')+'</div>'+
+      '<div class="cm">Gmailはアプリ内で直接、LINEと他社メールは Google Apps Script ブリッジ経由。</div></div>';
+    $('#log').appendChild(el); scrollLog();
+  },
+  lineExplain(){
+    say('LINEについての正直な回答です。');
+    const el=entry('ai');
+    el.querySelector('.txt').textContent=
+      '・個人アカウントのトーク履歴は、公式APIでは取得できません（回避不能な仕様）。\n'+
+      '・LINE Notify は 2025年3月31日で終了しました。正規の後継は Messaging API です。\n'+
+      '・できるのは「あなたのLINEへ通知を送る」ことだけ。Messaging API のプッシュ送信を使います。\n'+
+      '・それにはサーバー側の処理が必要なので、無料の Google Apps Script をブリッジとして使います。\n'+
+      '・パッケージ内の bridge-gas.js に、そのまま貼れるコードを用意しました。';
+    $('#log').appendChild(el); scrollLog();
+    renderComm(); $('#comm').hidden=false;
+  }
+};
+RULES.unshift(['gmail_connect',/^(?:Gmail|gmail|ジーメール|メール)(?:と|に)?\s*(?:接続|連携|つないで|繋いで|ログイン)(?:して)?$/i]);
+RULES.unshift(['comm_status',/^(?:連携|通信|通信アレイ|アレイ|接続状況|つながってる|何と繋がって)/]);
+RULES.unshift(['line_info',/^(?:LINE|ライン)(?:と|に)?\s*(?:接続|連携|つないで|繋いで|管理|対応)(?:して|したい)?$/i]);
+RULES.unshift(['mail_send',/^(?:メール|Gmail)(?:を)?\s*(?:送って|送信して|送る|作成して)$/i]);
+RULES.unshift(['mail_import',/^(?:Gmail|メール|受信トレイ|未読)(?:の)?(?:未読|新着)?(?:メール)?(?:を)?\s*(?:記憶庫に|記憶に|アルカに)?\s*(?:取り込んで|取り込み|保存して|記憶して|整理して)$/i]);
+RULES.unshift(['mail_list',/^(?:Gmail|メール|受信トレイ|未読)(?:の)?\s*(?:未読|新着|受信|メール)?(?:を)?\s*(?:確認して|確認|見せて|出して|チェックして|チェック|読み込んで|取得して)$/i]);
+const _origRun=Core.run.bind(Core);
+Core.run=async function(t){
+  const q=parse(t);
+  if(q.i==='gmail_connect'){ renderComm(); $('#comm').hidden=false; return say('通信アレイを開きました。クライアントIDを保存して「Gmailと接続」を押してください。') }
+  if(q.i==='mail_list')return Comm.mailList();
+  if(q.i==='mail_import')return Comm.mailImport();
+  if(q.i==='mail_send'){ renderComm(); $('#comm').hidden=false; return say('送信フォームを開きました。宛先・件名・本文を入れて送信してください。') }
+  if(q.i==='line_info')return Comm.lineExplain();
+  if(q.i==='comm_status')return Comm.status();
+  return _origRun(t);
+};
+
+/* ================= 22. 単独利用の徹底 ================= */
+async function refreshSeal(){
+  const m=Vault.meta||{};
+  $('#sOwner').value=m.owner||'';
+  $('#sPkRequired').checked=!!m.passkeyRequired;
+  const el=$('#sealNote');
+  if(el)el.innerHTML=m.passkeyRequired
+    ? 'パスキー専用が<b>有効</b>です。パスコードでは解錠できません。'
+    : '現在はパスコードでも解錠できます。パスキー専用にすると第三者は開けなくなります。';
+}
+$('#btnComm').addEventListener('click',async function(){ await refreshLlmBadge(); renderComm(); $('#comm').hidden=false });
+$('#cClose').addEventListener('click',function(){ $('#comm').hidden=true });
+$('#sOwner').addEventListener('change',async function(){
+  if(!Vault.meta)return;
+  Vault.meta.owner=$('#sOwner').value.trim(); await Vault.saveMeta();
+  toast('持ち主を記録しました。');
+});
+$('#sPkRequired').addEventListener('change',async function(){
+  const on=$('#sPkRequired').checked;
+  if(!Vault.meta)return;
+  if(on&&!Vault.meta.passkey){ $('#sPkRequired').checked=false; return toast('先にパスキーを登録してください。','err') }
+  if(on&&!confirm('パスキー専用にします。\n端末のパスキーを失うと解錠できなくなります（復旧はデータ消去のみ）。\nよろしいですか？')){ $('#sPkRequired').checked=false; return }
+  Vault.meta.passkeyRequired=on; await Vault.saveMeta(); await refreshSeal();
+  toast(on?'パスキー専用にしました。':'パスコード解錠を許可しました。');
+});
+
+/* ================= 23. PWA（アプリとして導入） ================= */
+let installEvt=null;
+window.addEventListener('beforeinstallprompt',function(e){ e.preventDefault(); installEvt=e; $('#btnInstall').hidden=false });
+window.addEventListener('appinstalled',function(){ installEvt=null; $('#btnInstall').hidden=true; toast('アプリとして導入しました。'); });
+$('#btnInstall').addEventListener('click',async function(){
+  if(installEvt){ installEvt.prompt(); try{ await installEvt.userChoice }catch(e){} installEvt=null; $('#btnInstall').hidden=true; return }
+  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent);
+  if(ios)toast('Safariの共有ボタン →「ホーム画面に追加」でアプリになります。');
+  else toast('ブラウザのメニュー →「アプリをインストール」で導入できます。');
+});
+if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
+  window.addEventListener('load',function(){ navigator.serviceWorker.register('./sw.js').catch(function(){}) });
+}
+
+})();
+</script>
+</body>
+</html>
